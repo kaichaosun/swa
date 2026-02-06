@@ -38,17 +38,19 @@ Verified,
 
 Start the server,
 ```bash
+cargo run -- --port 3002
+
 cargo build --release
-./target/release/rwa --port 8333
+./target/release/rwa --port 3002
 ```
 
 Embed tracker on your site
 ```html
-<script defer data-api="https://your-host:3000" src="https://your-host:3000/tracker.js"></script>
+<script defer data-api="http://127.0.0.1:3002" src="http://127.0.0.1:3002/tracker.js"></script>
 ````
 
 Track downloads
 
 ```html
-<a href="app.dmg" onclick="navigator.sendBeacon('https://your-host:3000/api/download', JSON.stringify({app_name:'MyApp',version:'1.0',platform:'macos'}))">Download</a>`
+<a href="app.dmg" onclick="navigator.sendBeacon('http://127.0.0.1:3002/api/download', JSON.stringify({app_name:'MyApp',version:'1.0',platform:'macos'}))">Download</a>`
 ```

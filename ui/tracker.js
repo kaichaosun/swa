@@ -54,13 +54,16 @@
       visitor_id: getVisitorId()
     };
     var url = api.replace(/\/$/, '') + '/api/event';
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, JSON.stringify(data));
+    var body = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    if (loc.protocol === 'file:' || !navigator.sendBeacon) {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+        keepalive: true
+      }).catch(function() {});
     } else {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', url, true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(JSON.stringify(data));
+      navigator.sendBeacon(url, body);
     }
   }
 

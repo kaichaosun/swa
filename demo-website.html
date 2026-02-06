@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Page</title>
+
+  <!-- Embed tracker.js for page view tracking -->
+  <script defer data-api="http://127.0.0.1:3002" src="http://127.0.0.1:3002/tracker.js"></script>
+
+  <!-- Define trackDownload in HTML -->
+  <script>
+    function trackDownload(app, version, platform) {
+      const api = "http://127.0.0.1:3002/api/download"; // your backend
+      const data = {
+        domain: window.location.hostname,
+        path: window.location.pathname,
+        browser: navigator.userAgent,
+        os: navigator.platform,
+        screen: screen.width + "x" + screen.height,
+        event: "download",
+        app_name: app,
+        version: version,
+        platform: platform,
+        timestamp: new Date().toISOString()
+      };
+
+      // Use navigator.sendBeacon if available (non-blocking)
+      // if (navigator.sendBeacon) {
+      //   navigator.sendBeacon(api, JSON.stringify(data));
+      //   console.log("Download beacon sent:", data);
+      // } else {
+        // fallback to fetch
+        fetch(api, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          keepalive: true
+        }).catch(() => {});
+        console.log("Download fetch sent:", data);
+      // }
+    }
+  </script>
+</head>
+<body>
+  <h1>Analytics Test</h1>
+
+  <!-- Download link -->
+  <a href="app.dmg" onclick="trackDownload('MyApp','2.0','macos')">Download App</a>
+</body>
+</html>
