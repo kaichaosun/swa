@@ -1,6 +1,6 @@
-# Web Analytics and Monitoring in Rust
+# Web Analytics and Monitoring
 
-RWA - Rust Website Analytics is fully implemented as a single-binary web analytics tool.
+SWA - Self hosted Website Analytics is fully implemented as a single-binary web analytics tool with Sqlite.
 
 Files created
 ┌─────────────────┬───────────────────────────────────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ Start the server,
 cargo run -- --port 3002
 
 cargo build --release
-./target/release/rwa --port 3002
+./target/release/swa --port 3002
 ```
 
 Embed tracker on your site

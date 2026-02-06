@@ -85,8 +85,8 @@ async fn main() {
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
-    tracing::info!("RWA listening on http://{}", addr);
-    println!("RWA listening on http://{}", addr);
+    tracing::info!("SWA listening on http://{}", addr);
+    println!("SWA listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
