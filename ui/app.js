@@ -7,14 +7,21 @@
 
   // --- Date range ---
 
+  function formatLocal(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  }
+
   function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+    return formatLocal(new Date());
   }
 
   function addDays(dateStr, n) {
     var d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    return formatLocal(d);
   }
 
   function getRange(preset) {
@@ -256,8 +263,18 @@
       document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       currentRange = getRange(btn.getAttribute('data-range'));
+      document.getElementById('date-from').value = currentRange.from;
+      document.getElementById('date-to').value = addDays(currentRange.to, -1);
       loadAll();
     });
+  });
+
+  // Open date picker when clicking anywhere on the date input
+  document.getElementById('date-from').addEventListener('click', function () {
+    if (this.showPicker) this.showPicker();
+  });
+  document.getElementById('date-to').addEventListener('click', function () {
+    if (this.showPicker) this.showPicker();
   });
 
   document.getElementById('btn-custom').addEventListener('click', function () {

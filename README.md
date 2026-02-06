@@ -39,7 +39,7 @@ Verified,
 Start the server,
 ```bash
 cargo build --release
-./target/release/rwa --port 3000
+./target/release/rwa --port 8333
 ```
 
 Embed tracker on your site
