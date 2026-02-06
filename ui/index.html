@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RWA - Analytics</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="header">
+    <h1><span>RWA</span> Analytics</h1>
+    <div class="controls">
+      <button data-range="today" class="active">Today</button>
+      <button data-range="7d">7 days</button>
+      <button data-range="30d">30 days</button>
+      <input type="date" id="date-from">
+      <input type="date" id="date-to">
+      <button id="btn-custom">Apply</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="realtime-bar">
+      <div class="realtime-dot"></div>
+      <span class="realtime-count" id="realtime-count">0</span>
+      <span>current visitors</span>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Total Views</div>
+        <div class="card-value" id="total-views">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Unique Visitors</div>
+        <div class="card-value" id="unique-visitors">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Avg Views / Day</div>
+        <div class="card-value" id="avg-views">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Downloads</div>
+        <div class="card-value" id="total-downloads">-</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Page Views</div>
+      <div class="chart-wrap"><canvas id="chart-pageviews"></canvas></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <div class="section-title">Top Pages</div>
+        <div class="table-wrap" id="table-pages"><div class="loading">Loading...</div></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Top Referrers</div>
+        <div class="table-wrap" id="table-referrers"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <div class="section-title">Browsers</div>
+        <div class="chart-wrap"><canvas id="chart-browsers"></canvas></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Operating Systems</div>
+        <div class="chart-wrap"><canvas id="chart-os"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Downloads</div>
+      <div class="chart-wrap"><canvas id="chart-downloads"></canvas></div>
+      <div class="table-wrap" id="table-downloads" style="margin-top:1rem;"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
