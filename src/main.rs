@@ -19,20 +19,34 @@ use tower_http::cors::CorsLayer;
 struct UiAssets;
 
 #[derive(Parser)]
-#[command(name = "ram", about = "Self-hosted website analytics")]
+#[command(name = "swa", about = "Self-hosted website analytics")]
 struct Args {
-    /// Port to listen on
+    /// Port for the tracker API
     #[arg(short, long, default_value_t = 3000)]
     port: u16,
+
+    /// Port for the dashboard UI
+    #[arg(long, default_value_t = 3001)]
+    ui_port: u16,
 
     /// Path to SQLite database file
     #[arg(short, long, default_value = "./ram.db")]
     db: PathBuf,
 }
 
-async fn serve_index() -> impl IntoResponse {
+async fn serve_index(
+    axum::extract::State(api_url): axum::extract::State<String>,
+) -> impl IntoResponse {
     match UiAssets::get("index.html") {
-        Some(content) => Html(String::from_utf8_lossy(&content.data).to_string()).into_response(),
+        Some(content) => {
+            let html = String::from_utf8_lossy(&content.data).to_string();
+            // Inject the API base URL so the UI knows where to reach the API
+            let html = html.replace(
+                "var API = '';",
+                &format!("var API = '{}';", api_url),
+            );
+            Html(html).into_response()
+        }
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -65,11 +79,10 @@ async fn main() {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE]);
 
-    let app = Router::new()
-        // Collection endpoints
+    // API server (tracker + stats endpoints)
+    let api_app = Router::new()
         .route("/api/event", post(handlers::collect_pageview))
         .route("/api/download", post(handlers::collect_download))
-        // Dashboard API
         .route("/api/stats/overview", get(handlers::stats_overview))
         .route("/api/stats/pageviews", get(handlers::stats_pageviews))
         .route("/api/stats/pages", get(handlers::stats_pages))
@@ -78,18 +91,33 @@ async fn main() {
         .route("/api/stats/os", get(handlers::stats_os))
         .route("/api/stats/downloads", get(handlers::stats_downloads))
         .route("/api/stats/realtime", get(handlers::stats_realtime))
-        // Embedded UI
-        .route("/", get(serve_index))
-        .route("/{*path}", get(serve_asset))
         .layer(cors)
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
-    tracing::info!("SWA listening on http://{}", addr);
-    println!("SWA listening on http://{}", addr);
+    // UI server (dashboard)
+    let api_url = format!("http://127.0.0.1:{}", args.port);
+    let ui_app = Router::new()
+        .route("/", get(serve_index))
+        .route("/{*path}", get(serve_asset))
+        .with_state(api_url);
 
-    let listener = tokio::net::TcpListener::bind(addr)
+    let api_addr = SocketAddr::from(([127, 0, 0, 1], args.port));
+    let ui_addr = SocketAddr::from(([127, 0, 0, 1], args.ui_port));
+
+    println!("SWA API listening on http://{}", api_addr);
+    println!("SWA UI  listening on http://{}", ui_addr);
+    tracing::info!("SWA API listening on http://{}", api_addr);
+    tracing::info!("SWA UI  listening on http://{}", ui_addr);
+
+    let api_listener = tokio::net::TcpListener::bind(api_addr)
         .await
-        .expect("Failed to bind");
-    axum::serve(listener, app).await.expect("Server error");
+        .expect("Failed to bind API port");
+    let ui_listener = tokio::net::TcpListener::bind(ui_addr)
+        .await
+        .expect("Failed to bind UI port");
+
+    tokio::select! {
+        r = axum::serve(api_listener, api_app) => r.expect("API server error"),
+        r = axum::serve(ui_listener, ui_app) => r.expect("UI server error"),
+    }
 }
