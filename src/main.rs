@@ -41,6 +41,17 @@ async fn serve_index() -> impl IntoResponse {
     }
 }
 
+async fn serve_tracker_js() -> Response {
+    match UiAssets::get("tracker.js") {
+        Some(content) => (
+            [(header::CONTENT_TYPE, "application/javascript")],
+            content.data.to_vec(),
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 async fn serve_asset(axum::extract::Path(path): axum::extract::Path<String>) -> Response {
     match UiAssets::get(&path) {
         Some(content) => {
@@ -69,10 +80,11 @@ async fn main() {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE]);
 
-    // Tracker server (collection endpoints for 3rd-party websites)
+    // Tracker server (collection endpoints + tracker script for 3rd-party websites)
     let api_app = Router::new()
         .route("/track/event", post(handlers::collect_pageview))
         .route("/track/download", post(handlers::collect_download))
+        .route("/tracker.js", get(serve_tracker_js))
         .layer(cors)
         .with_state(state.clone());
 
