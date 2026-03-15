@@ -288,6 +288,8 @@
   });
 
   // --- Init ---
+  document.getElementById('date-from').value = currentRange.from;
+  document.getElementById('date-to').value = addDays(currentRange.to, -1);
   loadAll();
 
   // Auto-refresh every 60s
