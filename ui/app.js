@@ -123,13 +123,13 @@
   // --- Render functions ---
 
   function loadRealtime() {
-    api('/api/stats/realtime').then(function (res) {
+    api('/dash/stats/realtime').then(function (res) {
       document.getElementById('realtime-count').textContent = res.data.active_visitors;
     }).catch(function () {});
   }
 
   function loadOverview() {
-    api('/api/stats/overview', currentRange).then(function (res) {
+    api('/dash/stats/overview', currentRange).then(function (res) {
       var d = res.data;
       document.getElementById('total-views').textContent = fmt(d.total_views);
       document.getElementById('unique-visitors').textContent = fmt(d.unique_visitors);
@@ -139,7 +139,7 @@
   }
 
   function loadPageviews() {
-    api('/api/stats/pageviews', currentRange).then(function (res) {
+    api('/dash/stats/pageviews', currentRange).then(function (res) {
       var data = res.data;
       var labels = data.map(function (r) { return r.date; });
       var values = data.map(function (r) { return r.count; });
@@ -149,7 +149,7 @@
   }
 
   function loadPages() {
-    api('/api/stats/pages', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
+    api('/dash/stats/pages', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
       var data = res.data;
       var el = document.getElementById('table-pages');
       if (!data.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
@@ -166,7 +166,7 @@
   }
 
   function loadReferrers() {
-    api('/api/stats/referrers', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
+    api('/dash/stats/referrers', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
       var data = res.data;
       var el = document.getElementById('table-referrers');
       if (!data.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
@@ -183,7 +183,7 @@
   }
 
   function loadBrowsers() {
-    api('/api/stats/browsers', currentRange).then(function (res) {
+    api('/dash/stats/browsers', currentRange).then(function (res) {
       var data = res.data;
       if (!data.length) return;
       var ctx = document.getElementById('chart-browsers').getContext('2d');
@@ -192,7 +192,7 @@
   }
 
   function loadOS() {
-    api('/api/stats/os', currentRange).then(function (res) {
+    api('/dash/stats/os', currentRange).then(function (res) {
       var data = res.data;
       if (!data.length) return;
       var ctx = document.getElementById('chart-os').getContext('2d');
@@ -201,7 +201,7 @@
   }
 
   function loadDownloads() {
-    api('/api/stats/downloads', currentRange).then(function (res) {
+    api('/dash/stats/downloads', currentRange).then(function (res) {
       var data = res.data;
       // Build daily chart grouped by app
       var apps = {};

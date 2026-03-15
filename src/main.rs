@@ -22,11 +22,11 @@ struct UiAssets;
 #[command(name = "swa", about = "Self-hosted website analytics")]
 struct Args {
     /// Port for the tracker API
-    #[arg(short, long, default_value_t = 3000)]
+    #[arg(short, long, default_value_t = 3330)]
     port: u16,
 
     /// Port for the dashboard UI
-    #[arg(long, default_value_t = 3001)]
+    #[arg(long, default_value_t = 3331)]
     ui_port: u16,
 
     /// Path to SQLite database file
@@ -34,19 +34,9 @@ struct Args {
     db: PathBuf,
 }
 
-async fn serve_index(
-    axum::extract::State(api_url): axum::extract::State<String>,
-) -> impl IntoResponse {
+async fn serve_index() -> impl IntoResponse {
     match UiAssets::get("index.html") {
-        Some(content) => {
-            let html = String::from_utf8_lossy(&content.data).to_string();
-            // Inject the API base URL so the UI knows where to reach the API
-            let html = html.replace(
-                "var API = '';",
-                &format!("var API = '{}';", api_url),
-            );
-            Html(html).into_response()
-        }
+        Some(content) => Html(String::from_utf8_lossy(&content.data).to_string()).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -79,27 +69,26 @@ async fn main() {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE]);
 
-    // API server (tracker + stats endpoints)
+    // Tracker server (collection endpoints for 3rd-party websites)
     let api_app = Router::new()
-        .route("/api/event", post(handlers::collect_pageview))
-        .route("/api/download", post(handlers::collect_download))
-        .route("/api/stats/overview", get(handlers::stats_overview))
-        .route("/api/stats/pageviews", get(handlers::stats_pageviews))
-        .route("/api/stats/pages", get(handlers::stats_pages))
-        .route("/api/stats/referrers", get(handlers::stats_referrers))
-        .route("/api/stats/browsers", get(handlers::stats_browsers))
-        .route("/api/stats/os", get(handlers::stats_os))
-        .route("/api/stats/downloads", get(handlers::stats_downloads))
-        .route("/api/stats/realtime", get(handlers::stats_realtime))
+        .route("/track/event", post(handlers::collect_pageview))
+        .route("/track/download", post(handlers::collect_download))
         .layer(cors)
-        .with_state(state);
+        .with_state(state.clone());
 
-    // UI server (dashboard)
-    let api_url = format!("http://127.0.0.1:{}", args.port);
+    // UI server (dashboard + stats API)
     let ui_app = Router::new()
+        .route("/dash/stats/overview", get(handlers::stats_overview))
+        .route("/dash/stats/pageviews", get(handlers::stats_pageviews))
+        .route("/dash/stats/pages", get(handlers::stats_pages))
+        .route("/dash/stats/referrers", get(handlers::stats_referrers))
+        .route("/dash/stats/browsers", get(handlers::stats_browsers))
+        .route("/dash/stats/os", get(handlers::stats_os))
+        .route("/dash/stats/downloads", get(handlers::stats_downloads))
+        .route("/dash/stats/realtime", get(handlers::stats_realtime))
         .route("/", get(serve_index))
         .route("/{*path}", get(serve_asset))
-        .with_state(api_url);
+        .with_state(state);
 
     let api_addr = SocketAddr::from(([127, 0, 0, 1], args.port));
     let ui_addr = SocketAddr::from(([127, 0, 0, 1], args.ui_port));
