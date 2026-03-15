@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use axum::body::Bytes;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Json;
@@ -11,8 +12,12 @@ pub type AppState = Arc<Database>;
 
 pub async fn collect_pageview(
     State(db): State<AppState>,
-    Json(event): Json<PageViewEvent>,
+    body: Bytes,
 ) -> StatusCode {
+    let event: PageViewEvent = match serde_json::from_slice(&body) {
+        Ok(e) => e,
+        Err(_) => return StatusCode::BAD_REQUEST,
+    };
     match db.insert_page_view(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
@@ -24,8 +29,12 @@ pub async fn collect_pageview(
 
 pub async fn collect_download(
     State(db): State<AppState>,
-    Json(event): Json<DownloadEvent>,
+    body: Bytes,
 ) -> StatusCode {
+    let event: DownloadEvent = match serde_json::from_slice(&body) {
+        Ok(e) => e,
+        Err(_) => return StatusCode::BAD_REQUEST,
+    };
     match db.insert_download(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {

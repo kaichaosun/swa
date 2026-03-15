@@ -54,7 +54,7 @@
       visitor_id: getVisitorId()
     };
     var url = api.replace(/\/$/, '') + '/track/event';
-    var body = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    var body = new Blob([JSON.stringify(data)], { type: 'text/plain' });
     if (loc.protocol === 'file:' || !navigator.sendBeacon) {
       fetch(url, {
         method: 'POST',
