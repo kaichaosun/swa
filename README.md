@@ -54,3 +54,73 @@ curl -s -X POST http://127.0.0.1:3002/api/download \
   -H 'Content-Type: application/json' \
   -d '{"app_name":"MyApp","version":"1.0","platform":"macos"}'
 ```
+
+## Deploy
+
+Here's a git-push-to-deploy setup for a Rust binary:
+
+On the remote server
+
+1. Create a bare repo:
+
+```sh
+mkdir -p ~/repos/swa.git
+cd ~/repos/swa.git
+git init --bare
+```
+
+2. Create the post-receive hook (~/repos/swa.git/hooks/post-receive):
+
+```sh
+#!/bin/bash
+set -e
+
+WORK_DIR=/opt/swa
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Checkout latest code
+mkdir -p $WORK_DIR
+git --work-tree=$WORK_DIR --git-dir=$HOME/repos/swa.git checkout -f
+
+# Build release binary
+cd $WORK_DIR
+cargo build --release
+
+# Restart the service
+sudo systemctl restart swa
+```
+
+chmod +x ~/repos/swa.git/hooks/post-receive
+
+
+3. Create a systemd service (/etc/systemd/system/swa.service):
+
+```sh
+[Unit]
+Description=SWA Analytics
+After=network.target
+
+[Service]
+ExecStart=/opt/swa/target/release/swa --port 3330 --ui-port 3331 --db /opt/swa/data/ram.db
+WorkingDirectory=/opt/swa
+Restart=always
+User=youruser
+
+[Install]
+WantedBy=multi-user.target
+
+```
+
+sudo systemctl daemon-reload
+sudo systemctl enable swa
+
+On your local machine
+
+Add the remote and push:
+git remote add deploy ssh://user@your-server/~/repos/swa.git
+git push deploy main
+
+Each git push deploy main will trigger the hook to build and restart the service.
+
+Note: Rust must be installed on the server (curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh). If the server is resource-constrained, consider
+cross-compiling locally and using scp instead.
