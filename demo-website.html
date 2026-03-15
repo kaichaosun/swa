@@ -5,12 +5,12 @@
   <title>Test Page</title>
 
   <!-- Embed tracker.js for page view tracking -->
-  <script defer data-api="http://127.0.0.1:3002" src="http://127.0.0.1:3002/tracker.js"></script>
+  <script defer data-api="http://127.0.0.1:3330" src="http://127.0.0.1:3330/tracker.js"></script>
 
   <!-- Define trackDownload in HTML -->
   <script>
     function trackDownload(app, version, platform) {
-      const api = "http://127.0.0.1:3002/api/download"; // your backend
+      const api = "http://127.0.0.1:3330/track/download"; // your backend
       const data = {
         domain: window.location.hostname,
         path: window.location.pathname,

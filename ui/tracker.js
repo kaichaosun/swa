@@ -53,7 +53,7 @@
       screen: screen.width + 'x' + screen.height,
       visitor_id: getVisitorId()
     };
-    var url = api.replace(/\/$/, '') + '/api/event';
+    var url = api.replace(/\/$/, '') + '/track/event';
     var body = new Blob([JSON.stringify(data)], { type: 'application/json' });
     if (loc.protocol === 'file:' || !navigator.sendBeacon) {
       fetch(url, {
