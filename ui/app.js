@@ -40,7 +40,10 @@
   function api(path, params) {
     var q = new URLSearchParams(params || {}).toString();
     var url = API + path + (q ? '?' + q : '');
-    return fetch(url).then(function (r) { return r.json(); });
+    return fetch(url).then(function (r) {
+      if (r.status === 401) { window.location.href = '/login'; return; }
+      return r.json();
+    });
   }
 
   function postApi(path, body) {
@@ -294,4 +297,11 @@
 
   // Auto-refresh every 60s
   refreshTimer = setInterval(loadAll, 60000);
+
+  // Logout
+  document.getElementById('btn-logout').addEventListener('click', function () {
+    fetch('/auth/logout', { method: 'POST' }).then(function () {
+      window.location.href = '/login';
+    });
+  });
 })();

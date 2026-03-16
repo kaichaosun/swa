@@ -1,3 +1,4 @@
+mod auth;
 mod db;
 mod handlers;
 mod models;
@@ -7,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::http::{header, HeaderValue, Method, StatusCode};
+use axum::middleware;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
@@ -36,6 +38,13 @@ struct Args {
 
 async fn serve_index() -> impl IntoResponse {
     match UiAssets::get("index.html") {
+        Some(content) => Html(String::from_utf8_lossy(&content.data).to_string()).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn serve_login() -> impl IntoResponse {
+    match UiAssets::get("login.html") {
         Some(content) => Html(String::from_utf8_lossy(&content.data).to_string()).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
@@ -88,8 +97,8 @@ async fn main() {
         .layer(cors)
         .with_state(state.clone());
 
-    // UI server (dashboard + stats API)
-    let ui_app = Router::new()
+    // UI server: protected routes (require auth)
+    let protected = Router::new()
         .route("/dash/stats/overview", get(handlers::stats_overview))
         .route("/dash/stats/pageviews", get(handlers::stats_pageviews))
         .route("/dash/stats/pages", get(handlers::stats_pages))
@@ -99,6 +108,15 @@ async fn main() {
         .route("/dash/stats/downloads", get(handlers::stats_downloads))
         .route("/dash/stats/realtime", get(handlers::stats_realtime))
         .route("/", get(serve_index))
+        .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth));
+
+    // UI server: public routes (login/register/static assets)
+    let ui_app = Router::new()
+        .merge(protected)
+        .route("/login", get(serve_login))
+        .route("/auth/register", post(handlers::register))
+        .route("/auth/login", post(handlers::login))
+        .route("/auth/logout", post(handlers::logout))
         .route("/{*path}", get(serve_asset))
         .with_state(state);
 

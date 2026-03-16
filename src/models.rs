@@ -119,3 +119,23 @@ pub struct RealtimeStats {
 pub struct ApiResponse<T: Serialize> {
     pub data: T,
 }
+
+// --- Auth ---
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthResponse {
+    pub success: bool,
+    pub message: String,
+}
