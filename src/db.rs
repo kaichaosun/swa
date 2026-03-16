@@ -51,6 +51,20 @@ impl Database {
 
             CREATE INDEX IF NOT EXISTS idx_download_events_created_at ON download_events(created_at);
             CREATE INDEX IF NOT EXISTS idx_download_events_app_name ON download_events(app_name);
+
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                expires_at TEXT NOT NULL
+            );
             ",
         )?;
         Ok(())
@@ -276,6 +290,59 @@ impl Database {
             })
         })?;
         rows.collect()
+    }
+
+    // --- Auth methods ---
+
+    pub fn count_users(&self) -> Result<i64, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))
+    }
+
+    pub fn create_user(&self, email: &str, password_hash: &str) -> Result<i64, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO users (email, password_hash) VALUES (?1, ?2)",
+            params![email, password_hash],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn get_user_by_email(&self, email: &str) -> Result<Option<(i64, String, String)>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id, email, password_hash FROM users WHERE email = ?1")?;
+        let mut rows = stmt.query(params![email])?;
+        match rows.next()? {
+            Some(row) => Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?))),
+            None => Ok(None),
+        }
+    }
+
+    pub fn create_session(&self, token: &str, user_id: i64, expires_at: &str) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, expires_at) VALUES (?1, ?2, ?3)",
+            params![token, user_id, expires_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn validate_session(&self, token: &str) -> Result<Option<i64>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT user_id FROM sessions WHERE token = ?1 AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"
+        )?;
+        let mut rows = stmt.query(params![token])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn delete_session(&self, token: &str) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM sessions WHERE token = ?1", params![token])?;
+        Ok(())
     }
 
     pub fn get_realtime_count(&self) -> Result<i64, rusqlite::Error> {
