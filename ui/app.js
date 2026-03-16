@@ -35,6 +35,15 @@
 
   var currentRange = getRange('today');
 
+  // Convert a local-date range {from, to} to UTC ISO datetimes for API queries.
+  // e.g. UTC+8 user's "2026-03-17" midnight local → "2026-03-16T16:00:00.000Z"
+  function apiRange(range) {
+    return {
+      from: new Date(range.from + 'T00:00:00').toISOString(),
+      to: new Date(range.to + 'T00:00:00').toISOString()
+    };
+  }
+
   // --- API helpers ---
 
   function api(path, params) {
@@ -132,7 +141,7 @@
   }
 
   function loadOverview() {
-    api('/dash/stats/overview', currentRange).then(function (res) {
+    api('/dash/stats/overview', apiRange(currentRange)).then(function (res) {
       var d = res.data;
       document.getElementById('total-views').textContent = fmt(d.total_views);
       document.getElementById('unique-visitors').textContent = fmt(d.unique_visitors);
@@ -142,7 +151,7 @@
   }
 
   function loadPageviews() {
-    api('/dash/stats/pageviews', currentRange).then(function (res) {
+    api('/dash/stats/pageviews', apiRange(currentRange)).then(function (res) {
       var data = res.data;
       var labels = data.map(function (r) { return r.date; });
       var values = data.map(function (r) { return r.count; });
@@ -152,7 +161,7 @@
   }
 
   function loadPages() {
-    api('/dash/stats/pages', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
+    api('/dash/stats/pages', Object.assign({}, apiRange(currentRange), { limit: 10 })).then(function (res) {
       var data = res.data;
       var el = document.getElementById('table-pages');
       if (!data.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
@@ -169,7 +178,7 @@
   }
 
   function loadReferrers() {
-    api('/dash/stats/referrers', Object.assign({}, currentRange, { limit: 10 })).then(function (res) {
+    api('/dash/stats/referrers', Object.assign({}, apiRange(currentRange), { limit: 10 })).then(function (res) {
       var data = res.data;
       var el = document.getElementById('table-referrers');
       if (!data.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
@@ -186,7 +195,7 @@
   }
 
   function loadBrowsers() {
-    api('/dash/stats/browsers', currentRange).then(function (res) {
+    api('/dash/stats/browsers', apiRange(currentRange)).then(function (res) {
       var data = res.data;
       if (!data.length) return;
       var ctx = document.getElementById('chart-browsers').getContext('2d');
@@ -195,7 +204,7 @@
   }
 
   function loadOS() {
-    api('/dash/stats/os', currentRange).then(function (res) {
+    api('/dash/stats/os', apiRange(currentRange)).then(function (res) {
       var data = res.data;
       if (!data.length) return;
       var ctx = document.getElementById('chart-os').getContext('2d');
@@ -204,7 +213,7 @@
   }
 
   function loadDownloads() {
-    api('/dash/stats/downloads', currentRange).then(function (res) {
+    api('/dash/stats/downloads', apiRange(currentRange)).then(function (res) {
       var data = res.data;
       // Build daily chart grouped by app
       var apps = {};
