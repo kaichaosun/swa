@@ -66,7 +66,7 @@ pub async fn stats_pageviews(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<Vec<DailyStat>>>, StatusCode> {
-    db.get_pageview_stats(&range.from, &range.to)
+    db.get_pageview_stats(&range.from, &range.to, range.tz_offset)
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get pageview stats: {}", e);
@@ -126,7 +126,7 @@ pub async fn stats_downloads(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<DownloadStats>>, StatusCode> {
-    db.get_download_stats(&range.from, &range.to)
+    db.get_download_stats(&range.from, &range.to, range.tz_offset)
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get download stats: {}", e);

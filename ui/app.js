@@ -35,12 +35,15 @@
 
   var currentRange = getRange('today');
 
-  // Convert a local-date range {from, to} to UTC ISO datetimes for API queries.
-  // e.g. UTC+8 user's "2026-03-17" midnight local → "2026-03-16T16:00:00.000Z"
+  // Convert a local-date range {from, to} to UTC ISO datetimes for API queries,
+  // and include the timezone offset (minutes ahead of UTC) for server-side date grouping.
+  // e.g. UTC+8 user's "2026-03-17" midnight local → "2026-03-16T16:00:00.000Z", tz_offset=480
   function apiRange(range) {
+    var tz_offset = -new Date().getTimezoneOffset(); // +480 for UTC+8
     return {
       from: new Date(range.from + 'T00:00:00').toISOString(),
-      to: new Date(range.to + 'T00:00:00').toISOString()
+      to: new Date(range.to + 'T00:00:00').toISOString(),
+      tz_offset: tz_offset
     };
   }
 

@@ -141,16 +141,17 @@ impl Database {
         })
     }
 
-    pub fn get_pageview_stats(&self, from: &str, to: &str) -> Result<Vec<DailyStat>, rusqlite::Error> {
+    pub fn get_pageview_stats(&self, from: &str, to: &str, tz_offset: i32) -> Result<Vec<DailyStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let tz_modifier = format!("{:+} minutes", tz_offset);
         let mut stmt = conn.prepare(
-            "SELECT date(created_at) as day, COUNT(*) as count
+            "SELECT date(created_at, ?3) as day, COUNT(*) as count
              FROM page_views
              WHERE created_at >= ?1 AND created_at < ?2
              GROUP BY day
              ORDER BY day",
         )?;
-        let rows = stmt.query_map(params![from, to], |row| {
+        let rows = stmt.query_map(params![from, to, tz_modifier], |row| {
             Ok(DailyStat {
                 date: row.get(0)?,
                 count: row.get(1)?,
@@ -234,18 +235,19 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_download_stats(&self, from: &str, to: &str) -> Result<DownloadStats, rusqlite::Error> {
+    pub fn get_download_stats(&self, from: &str, to: &str, tz_offset: i32) -> Result<DownloadStats, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let tz_modifier = format!("{:+} minutes", tz_offset);
 
         let mut stmt = conn.prepare(
-            "SELECT date(created_at) as day, app_name, COUNT(*) as count
+            "SELECT date(created_at, ?3) as day, app_name, COUNT(*) as count
              FROM download_events
              WHERE created_at >= ?1 AND created_at < ?2
              GROUP BY day, app_name
              ORDER BY day",
         )?;
         let daily: Vec<DownloadDailyStat> = stmt
-            .query_map(params![from, to], |row| {
+            .query_map(params![from, to, tz_modifier], |row| {
                 Ok(DownloadDailyStat {
                     date: row.get(0)?,
                     app_name: row.get(1)?,

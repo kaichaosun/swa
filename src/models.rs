@@ -35,6 +35,9 @@ pub struct DownloadEvent {
 pub struct DateRange {
     pub from: String,
     pub to: String,
+    /// Minutes ahead of UTC (e.g. 480 for UTC+8). Used to group dates by local time.
+    #[serde(default)]
+    pub tz_offset: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +46,8 @@ pub struct DateRangeWithLimit {
     pub to: String,
     #[serde(default = "default_limit")]
     pub limit: i64,
+    #[serde(default)]
+    pub tz_offset: i32,
 }
 
 fn default_limit() -> i64 {
