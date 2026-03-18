@@ -1,126 +1,163 @@
-# SWA - Self-hosted Website Analytics
+# SWA — Self-hosted Website Analytics
 
-A single-binary web analytics tool with SQLite.
+A lightweight, single-binary web analytics tool built with Rust and SQLite. No external dependencies, no cloud services — just deploy and go.
 
-## Usage
+## Features
 
-Start the server:
+- **Single binary** — UI, API, and tracker bundled into one executable via `rust-embed`
+- **SQLite storage** — WAL mode, zero-config, file-based database
+- **Two-port architecture** — separate ports for the public tracker API and the authenticated dashboard
+- **Pageview + download tracking** — out of the box
+- **Privacy-friendly** — respects Do-Not-Track; daily-rotating fingerprints (no cookies for visitors)
+- **Auth-protected dashboard** — cookie-based sessions with argon2 password hashing
+- **Dark-themed dashboard** — real-time stats, date ranges, Chart.js graphs, auto-refresh
+
+## Quick Start
 
 ```bash
-cargo run -- --port 3002
-
-# Or build release binary
+# Build release binary
 cargo build --release
-./target/release/swa --port 3002
+
+# Start (defaults: API on :3330, UI on :3331, DB at ./ram.db)
+./target/release/swa
+
+# Or customize
+./target/release/swa --port 3330 --ui-port 3331 --db /path/to/analytics.db
 ```
 
-Embed tracker on your site:
+Open `http://127.0.0.1:3331` to register an account and access the dashboard.
+
+## Integrate the Tracker
+
+Add one script tag to any website you want to track:
 
 ```html
-<script defer data-api="http://127.0.0.1:3002" src="http://127.0.0.1:3002/tracker.js"></script>
+<script defer data-api="https://your-server:3330" src="https://your-server:3330/tracker.js"></script>
 ```
 
-Track downloads:
+The tracker (~1 KB) automatically collects page path, referrer, browser, OS, and screen size.
+
+### Download Tracking
 
 ```html
-<a href="app.dmg" onclick="navigator.sendBeacon('http://127.0.0.1:3002/api/download', JSON.stringify({app_name:'MyApp',version:'1.0',platform:'macos'}))">Download</a>
+<a href="app.dmg"
+   onclick="navigator.sendBeacon('https://your-server:3330/track/download',
+     JSON.stringify({app_name:'MyApp',version:'1.0',platform:'macos'}))">
+  Download for macOS
+</a>
 ```
 
+## API Reference
 
-## Files
+SWA runs two servers:
 
-| File | Purpose |
-|------|---------|
-| `Cargo.toml` | Dependencies: axum, tokio, rusqlite (bundled), rust-embed, clap, etc. |
-| `src/main.rs` | CLI args, server setup, CORS, embedded UI serving, route mounting |
-| `src/db.rs` | SQLite with WAL mode, schema migration, all query functions |
-| `src/models.rs` | Request/response structs (PageViewEvent, DownloadEvent, stats types) |
-| `src/handlers.rs` | 10 API endpoints (2 collection + 8 dashboard) |
-| `ui/tracker.js` | Lightweight tracking script (~1KB) with DNT support, daily fingerprinting |
-| `ui/index.html` | Dashboard SPA with Chart.js |
-| `ui/style.css` | Dark-themed responsive styles |
-| `ui/app.js` | Dashboard logic: date ranges, charts, tables, auto-refresh |
+| Port (default) | Purpose |
+|---|---|
+| `3330` | **Tracker API** — public, receives events from tracked sites |
+| `3331` | **Dashboard UI** — auth-protected, serves the analytics dashboard |
 
-## Manual Tracking
+### Collection Endpoints (Tracker API — port 3330)
 
-```bash
-curl -s "http://127.0.0.1:3002/api/stats/overview?from=2026-02-06&to=2026-02-07"
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/track/event` | Record a pageview |
+| `POST` | `/track/download` | Record a download |
+| `GET` | `/tracker.js` | Serve the tracking script |
 
-curl -s -X POST http://127.0.0.1:3002/api/event \
-  -H 'Content-Type: application/json' \
-  -d '{"domain":"example.com","path":"/test","referrer":"https://google.com","browser":"Chrome","os":"macOS","screen":"1920x1080","visitor_id":"abc123"}'
-  
-curl -s -X POST http://127.0.0.1:3002/api/download \
-  -H 'Content-Type: application/json' \
-  -d '{"app_name":"MyApp","version":"1.0","platform":"macos"}'
+### Dashboard Endpoints (UI — port 3331, auth required)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/dash/stats/overview` | Total views, visitors, bounce rate |
+| `GET` | `/dash/stats/pageviews` | Daily pageview time series |
+| `GET` | `/dash/stats/pages` | Top pages |
+| `GET` | `/dash/stats/referrers` | Top referrers |
+| `GET` | `/dash/stats/browsers` | Browser breakdown |
+| `GET` | `/dash/stats/os` | OS breakdown |
+| `GET` | `/dash/stats/downloads` | Download stats |
+| `GET` | `/dash/stats/realtime` | Active visitors in last 5 min |
+
+### Auth Endpoints (UI — port 3331, public)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/auth/register` | Create an account |
+| `POST` | `/auth/login` | Log in (sets `swa_session` cookie) |
+| `POST` | `/auth/logout` | Log out |
+
+## Project Structure
+
+```
+src/
+  main.rs        # CLI, two-server setup, CORS, embedded asset serving
+  db.rs          # SQLite (WAL), schema migrations, query functions
+  models.rs      # Request/response types
+  handlers.rs    # All API endpoint handlers
+  auth.rs        # Cookie-based session middleware
+ui/
+  tracker.js     # Lightweight tracking script (DNT-aware)
+  index.html     # Dashboard SPA
+  login.html     # Login / register page
+  app.js         # Dashboard logic (charts, tables, date ranges)
+  style.css      # Dark-themed responsive styles
 ```
 
 ## Deploy
 
-Here's a git-push-to-deploy setup for a Rust binary:
+### Systemd Service
 
-On the remote server
+Create `/etc/systemd/system/swa.service`:
 
-1. Create a bare repo:
-
-```sh
-mkdir -p ~/repos/swa.git
-cd ~/repos/swa.git
-git init --bare
-```
-
-2. Create the post-receive hook (~/repos/swa.git/hooks/post-receive):
-
-```sh
-#!/bin/bash
-set -e
-
-WORK_DIR=/opt/swa
-export PATH="$HOME/.cargo/bin:$PATH"
-
-# Checkout latest code
-mkdir -p $WORK_DIR
-git --work-tree=$WORK_DIR --git-dir=$HOME/repos/swa.git checkout -f
-
-# Build release binary
-cd $WORK_DIR
-cargo build --release
-
-# Restart the service
-sudo systemctl restart swa
-```
-
-chmod +x ~/repos/swa.git/hooks/post-receive
-
-
-3. Create a systemd service (/etc/systemd/system/swa.service):
-
-```sh
+```ini
 [Unit]
 Description=SWA Analytics
 After=network.target
 
 [Service]
-ExecStart=/opt/swa/target/release/swa --port 3330 --ui-port 3331 --db /opt/swa/data/ram.db
+ExecStart=/opt/swa/swa --port 3330 --ui-port 3331 --db /opt/swa/data/analytics.db
 WorkingDirectory=/opt/swa
 Restart=always
-User=youruser
+User=swa
 
 [Install]
 WantedBy=multi-user.target
-
 ```
 
+```bash
 sudo systemctl daemon-reload
-sudo systemctl enable swa
+sudo systemctl enable --now swa
+```
 
-On your local machine
+### Git Push-to-Deploy (optional)
 
-Add the remote and push:
+On the remote server, set up a bare repo with a `post-receive` hook:
+
+```bash
+mkdir -p ~/repos/swa.git && cd ~/repos/swa.git && git init --bare
+
+cat > hooks/post-receive << 'EOF'
+#!/bin/bash
+set -e
+WORK_DIR=/opt/swa
+export PATH="$HOME/.cargo/bin:$PATH"
+mkdir -p $WORK_DIR
+git --work-tree=$WORK_DIR --git-dir=$HOME/repos/swa.git checkout -f
+cd $WORK_DIR && cargo build --release
+sudo systemctl restart swa
+EOF
+
+chmod +x hooks/post-receive
+```
+
+Then push from your local machine:
+
+```bash
 git remote add deploy ssh://user@your-server/~/repos/swa.git
 git push deploy main
+```
 
-Each git push deploy main will trigger the hook to build and restart the service.
+> **Note:** Rust must be installed on the server. For resource-constrained servers, cross-compile locally and `scp` the binary instead.
 
-Note: Rust must be installed on the server (curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh). If the server is resource-constrained, consider
-cross-compiling locally and using scp instead.
+## License
+
+MIT
