@@ -302,10 +302,31 @@
     }
   });
 
+  // --- Settings ---
+
+  function loadSettings() {
+    api('/dash/settings').then(function (res) {
+      if (!res) return;
+      document.getElementById('toggle-localhost').checked = res.data.allow_localhost;
+    }).catch(function () {});
+  }
+
+  document.getElementById('toggle-localhost').addEventListener('change', function () {
+    var checked = this.checked;
+    postApi('/dash/settings', { allow_localhost: checked }).then(function (r) {
+      if (!r.ok) {
+        document.getElementById('toggle-localhost').checked = !checked;
+      }
+    }).catch(function () {
+      document.getElementById('toggle-localhost').checked = !checked;
+    });
+  });
+
   // --- Init ---
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
   loadAll();
+  loadSettings();
 
   // Auto-refresh every 60s
   refreshTimer = setInterval(loadAll, 60000);

@@ -16,14 +16,26 @@ use crate::models::*;
 
 pub type AppState = Arc<Database>;
 
-pub async fn collect_pageview(
-    State(db): State<AppState>,
-    body: Bytes,
-) -> StatusCode {
+fn is_localhost(domain: &str) -> bool {
+    let host = domain.split(':').next().unwrap_or(domain);
+    host.is_empty()
+        || host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "0.0.0.0"
+}
+
+pub async fn collect_pageview(State(db): State<AppState>, body: Bytes) -> StatusCode {
     let event: PageViewEvent = match serde_json::from_slice(&body) {
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
+    if is_localhost(&event.domain) {
+        let allow = db.get_setting("allow_localhost").unwrap_or(None);
+        if allow.as_deref() != Some("true") {
+            return StatusCode::ACCEPTED;
+        }
+    }
     match db.insert_page_view(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
@@ -33,10 +45,7 @@ pub async fn collect_pageview(
     }
 }
 
-pub async fn collect_download(
-    State(db): State<AppState>,
-    body: Bytes,
-) -> StatusCode {
+pub async fn collect_download(State(db): State<AppState>, body: Bytes) -> StatusCode {
     let event: DownloadEvent = match serde_json::from_slice(&body) {
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
@@ -151,41 +160,115 @@ pub async fn stats_realtime(
         })
 }
 
+// --- Settings handlers ---
+
+pub async fn get_settings(
+    State(db): State<AppState>,
+) -> Result<Json<ApiResponse<SettingsResponse>>, StatusCode> {
+    let allow_localhost = db
+        .get_setting("allow_localhost")
+        .map_err(|e| {
+            tracing::error!("Failed to get settings: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    Ok(Json(ApiResponse {
+        data: SettingsResponse { allow_localhost },
+    }))
+}
+
+pub async fn update_settings(State(db): State<AppState>, body: Bytes) -> impl IntoResponse {
+    let req: SettingsUpdate = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Invalid request".into(),
+                }),
+            )
+        }
+    };
+
+    let value = if req.allow_localhost { "true" } else { "false" };
+    match db.set_setting("allow_localhost", value) {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(AuthResponse {
+                success: true,
+                message: "Settings updated".into(),
+            }),
+        ),
+        Err(e) => {
+            tracing::error!("Failed to update settings: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Server error".into(),
+                }),
+            )
+        }
+    }
+}
+
 // --- Auth handlers ---
 
-pub async fn register(
-    State(db): State<AppState>,
-    body: Bytes,
-) -> impl IntoResponse {
+pub async fn register(State(db): State<AppState>, body: Bytes) -> impl IntoResponse {
     let req: RegisterRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(AuthResponse {
-            success: false, message: "Invalid request".into(),
-        })),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Invalid request".into(),
+                }),
+            )
+        }
     };
 
     if req.email.is_empty() || !req.email.contains('@') {
-        return (StatusCode::BAD_REQUEST, Json(AuthResponse {
-            success: false, message: "Invalid email".into(),
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(AuthResponse {
+                success: false,
+                message: "Invalid email".into(),
+            }),
+        );
     }
 
     if req.password.len() < 8 {
-        return (StatusCode::BAD_REQUEST, Json(AuthResponse {
-            success: false, message: "Password must be at least 8 characters".into(),
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(AuthResponse {
+                success: false,
+                message: "Password must be at least 8 characters".into(),
+            }),
+        );
     }
 
     match db.count_users() {
         Ok(count) if count >= 1 => {
-            return (StatusCode::FORBIDDEN, Json(AuthResponse {
-                success: false, message: "Registration is closed".into(),
-            }));
+            return (
+                StatusCode::FORBIDDEN,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Registration is closed".into(),
+                }),
+            );
         }
         Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(AuthResponse {
-                success: false, message: "Server error".into(),
-            }));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Server error".into(),
+                }),
+            );
         }
         _ => {}
     }
@@ -194,51 +277,90 @@ pub async fn register(
     let argon2 = Argon2::default();
     let password_hash = match argon2.hash_password(req.password.as_bytes(), &salt) {
         Ok(h) => h.to_string(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(AuthResponse {
-            success: false, message: "Server error".into(),
-        })),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Server error".into(),
+                }),
+            )
+        }
     };
 
     match db.create_user(&req.email, &password_hash) {
-        Ok(_) => (StatusCode::CREATED, Json(AuthResponse {
-            success: true, message: "Account created".into(),
-        })),
-        Err(_) => (StatusCode::CONFLICT, Json(AuthResponse {
-            success: false, message: "Email already registered".into(),
-        })),
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(AuthResponse {
+                success: true,
+                message: "Account created".into(),
+            }),
+        ),
+        Err(_) => (
+            StatusCode::CONFLICT,
+            Json(AuthResponse {
+                success: false,
+                message: "Email already registered".into(),
+            }),
+        ),
     }
 }
 
-pub async fn login(
-    State(db): State<AppState>,
-    jar: CookieJar,
-    body: Bytes,
-) -> Response {
+pub async fn login(State(db): State<AppState>, jar: CookieJar, body: Bytes) -> Response {
     let req: LoginRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(AuthResponse {
-            success: false, message: "Invalid request".into(),
-        })).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Invalid request".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let (user_id, _, password_hash) = match db.get_user_by_email(&req.email) {
         Ok(Some(u)) => u,
-        _ => return (StatusCode::UNAUTHORIZED, Json(AuthResponse {
-            success: false, message: "Invalid email or password".into(),
-        })).into_response(),
+        _ => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Invalid email or password".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
     let parsed_hash = match PasswordHash::new(&password_hash) {
         Ok(h) => h,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(AuthResponse {
-            success: false, message: "Server error".into(),
-        })).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Server error".into(),
+                }),
+            )
+                .into_response()
+        }
     };
 
-    if Argon2::default().verify_password(req.password.as_bytes(), &parsed_hash).is_err() {
-        return (StatusCode::UNAUTHORIZED, Json(AuthResponse {
-            success: false, message: "Invalid email or password".into(),
-        })).into_response();
+    if Argon2::default()
+        .verify_password(req.password.as_bytes(), &parsed_hash)
+        .is_err()
+    {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthResponse {
+                success: false,
+                message: "Invalid email or password".into(),
+            }),
+        )
+            .into_response();
     }
 
     // Generate session token
@@ -251,9 +373,14 @@ pub async fn login(
         .to_string();
 
     if db.create_session(&token, user_id, &expires_at).is_err() {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(AuthResponse {
-            success: false, message: "Server error".into(),
-        })).into_response();
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AuthResponse {
+                success: false,
+                message: "Server error".into(),
+            }),
+        )
+            .into_response();
     }
 
     let cookie = format!(
@@ -262,20 +389,26 @@ pub async fn login(
     );
     let jar = jar.add(axum_extra::extract::cookie::Cookie::parse(cookie).unwrap());
 
-    (jar, Json(AuthResponse {
-        success: true, message: "Logged in".into(),
-    })).into_response()
+    (
+        jar,
+        Json(AuthResponse {
+            success: true,
+            message: "Logged in".into(),
+        }),
+    )
+        .into_response()
 }
 
-pub async fn logout(
-    State(db): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
+pub async fn logout(State(db): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(cookie) = jar.get("swa_session") {
         let _ = db.delete_session(cookie.value());
     }
     let jar = jar.remove(axum_extra::extract::cookie::Cookie::from("swa_session"));
-    (jar, Json(AuthResponse {
-        success: true, message: "Logged out".into(),
-    }))
+    (
+        jar,
+        Json(AuthResponse {
+            success: true,
+            message: "Logged out".into(),
+        }),
+    )
 }
