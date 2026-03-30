@@ -79,6 +79,20 @@
       <div class="chart-wrap"><canvas id="chart-downloads"></canvas></div>
       <div class="table-wrap" id="table-downloads" style="margin-top:1rem;"></div>
     </div>
+
+    <div class="section">
+      <div class="section-title">Settings</div>
+      <div class="setting-row">
+        <label class="toggle-label" for="toggle-localhost">
+          <span>Allow localhost events</span>
+          <span class="setting-hint">When disabled, events from localhost / 127.0.0.1 are silently dropped.</span>
+        </label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-localhost">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

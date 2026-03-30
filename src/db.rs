@@ -65,6 +65,11 @@ impl Database {
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 expires_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             ",
         )?;
         Ok(())
@@ -344,6 +349,28 @@ impl Database {
     pub fn delete_session(&self, token: &str) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM sessions WHERE token = ?1", params![token])?;
+        Ok(())
+    }
+
+    // --- Settings methods ---
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query(params![key])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row.get(0)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
         Ok(())
     }
 

@@ -107,6 +107,8 @@ async fn main() {
         .route("/dash/stats/os", get(handlers::stats_os))
         .route("/dash/stats/downloads", get(handlers::stats_downloads))
         .route("/dash/stats/realtime", get(handlers::stats_realtime))
+        .route("/dash/settings", get(handlers::get_settings))
+        .route("/dash/settings", post(handlers::update_settings))
         .route("/", get(serve_index))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth));
 

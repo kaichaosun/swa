@@ -16,6 +16,14 @@ use crate::models::*;
 
 pub type AppState = Arc<Database>;
 
+fn is_localhost(domain: &str) -> bool {
+    let host = domain.split(':').next().unwrap_or(domain);
+    host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "0.0.0.0"
+}
+
 pub async fn collect_pageview(
     State(db): State<AppState>,
     body: Bytes,
@@ -24,6 +32,12 @@ pub async fn collect_pageview(
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
+    if is_localhost(&event.domain) {
+        let allow = db.get_setting("allow_localhost").unwrap_or(None);
+        if allow.as_deref() != Some("true") {
+            return StatusCode::ACCEPTED;
+        }
+    }
     match db.insert_page_view(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
@@ -149,6 +163,49 @@ pub async fn stats_realtime(
             tracing::error!("Failed to get realtime stats: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })
+}
+
+// --- Settings handlers ---
+
+pub async fn get_settings(
+    State(db): State<AppState>,
+) -> Result<Json<ApiResponse<SettingsResponse>>, StatusCode> {
+    let allow_localhost = db.get_setting("allow_localhost")
+        .map_err(|e| {
+            tracing::error!("Failed to get settings: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    Ok(Json(ApiResponse {
+        data: SettingsResponse { allow_localhost },
+    }))
+}
+
+pub async fn update_settings(
+    State(db): State<AppState>,
+    body: Bytes,
+) -> impl IntoResponse {
+    let req: SettingsUpdate = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(AuthResponse {
+            success: false, message: "Invalid request".into(),
+        })),
+    };
+
+    let value = if req.allow_localhost { "true" } else { "false" };
+    match db.set_setting("allow_localhost", value) {
+        Ok(_) => (StatusCode::OK, Json(AuthResponse {
+            success: true, message: "Settings updated".into(),
+        })),
+        Err(e) => {
+            tracing::error!("Failed to update settings: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(AuthResponse {
+                success: false, message: "Server error".into(),
+            }))
+        }
+    }
 }
 
 // --- Auth handlers ---

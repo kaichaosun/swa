@@ -125,6 +125,18 @@ pub struct ApiResponse<T: Serialize> {
     pub data: T,
 }
 
+// --- Settings ---
+
+#[derive(Debug, Serialize)]
+pub struct SettingsResponse {
+    pub allow_localhost: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SettingsUpdate {
+    pub allow_localhost: bool,
+}
+
 // --- Auth ---
 
 #[derive(Debug, Deserialize)]
