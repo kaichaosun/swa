@@ -45,7 +45,7 @@
   function send() {
     var loc = window.location;
     var data = {
-      domain: loc.hostname,
+      domain: loc.hostname || (loc.protocol === 'file:' ? 'localhost' : 'unknown'),
       path: loc.pathname,
       referrer: document.referrer || '',
       browser: getBrowser(),

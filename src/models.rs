@@ -35,6 +35,7 @@ pub struct DownloadEvent {
 pub struct DateRange {
     pub from: String,
     pub to: String,
+    pub domain: String,
     /// Minutes ahead of UTC (e.g. 480 for UTC+8). Used to group dates by local time.
     #[serde(default)]
     pub tz_offset: i32,
@@ -44,6 +45,7 @@ pub struct DateRange {
 pub struct DateRangeWithLimit {
     pub from: String,
     pub to: String,
+    pub domain: String,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -121,8 +123,21 @@ pub struct RealtimeStats {
 }
 
 #[derive(Debug, Serialize)]
+pub struct DomainInfo {
+    pub domain: String,
+    pub total_views: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ApiResponse<T: Serialize> {
     pub data: T,
+}
+
+// --- Realtime query ---
+
+#[derive(Debug, Deserialize)]
+pub struct RealtimeQuery {
+    pub domain: String,
 }
 
 // --- Settings ---

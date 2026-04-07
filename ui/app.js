@@ -4,6 +4,7 @@
   var API = '';
   var charts = {};
   var refreshTimer;
+  var currentDomain = ''; // empty = all sites
 
   // --- Date range ---
 
@@ -43,7 +44,8 @@
     return {
       from: new Date(range.from + 'T00:00:00').toISOString(),
       to: new Date(range.to + 'T00:00:00').toISOString(),
-      tz_offset: tz_offset
+      tz_offset: tz_offset,
+      domain: currentDomain
     };
   }
 
@@ -138,7 +140,7 @@
   // --- Render functions ---
 
   function loadRealtime() {
-    api('/dash/stats/realtime').then(function (res) {
+    api('/dash/stats/realtime', { domain: currentDomain }).then(function (res) {
       document.getElementById('realtime-count').textContent = res.data.active_visitors;
     }).catch(function () {});
   }
@@ -258,9 +260,40 @@
     return d.innerHTML;
   }
 
+  // --- Site selector ---
+
+  function loadDomains() {
+    return api('/dash/stats/domains').then(function (res) {
+      if (!res || !res.data.length) return;
+      var select = document.getElementById('site-selector');
+      var prev = currentDomain;
+      select.innerHTML = '';
+      res.data.forEach(function (d) {
+        var opt = document.createElement('option');
+        opt.value = d.domain;
+        opt.textContent = d.domain + ' (' + fmt(d.total_views) + ')';
+        select.appendChild(opt);
+      });
+      // Restore previous selection or pick first
+      var found = res.data.some(function (d) { return d.domain === prev; });
+      if (found) {
+        select.value = prev;
+      } else {
+        select.value = res.data[0].domain;
+      }
+      currentDomain = select.value;
+    }).catch(function () {});
+  }
+
+  document.getElementById('site-selector').addEventListener('change', function () {
+    currentDomain = this.value;
+    loadAll();
+  });
+
   // --- Load all ---
 
   function loadAll() {
+    if (!currentDomain) return;
     loadRealtime();
     loadOverview();
     loadPageviews();
@@ -325,7 +358,9 @@
   // --- Init ---
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
-  loadAll();
+  loadDomains().then(function () {
+    loadAll();
+  });
   loadSettings();
 
   // Auto-refresh every 60s
