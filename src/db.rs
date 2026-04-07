@@ -40,17 +40,18 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_page_views_domain ON page_views(domain);
             CREATE INDEX IF NOT EXISTS idx_page_views_visitor_id ON page_views(visitor_id);
 
-            CREATE TABLE IF NOT EXISTS download_events (
+            CREATE TABLE IF NOT EXISTS action_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                app_name TEXT NOT NULL,
-                version TEXT NOT NULL DEFAULT '',
-                platform TEXT NOT NULL DEFAULT '',
+                domain TEXT NOT NULL,
+                name TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
                 referrer TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
 
-            CREATE INDEX IF NOT EXISTS idx_download_events_created_at ON download_events(created_at);
-            CREATE INDEX IF NOT EXISTS idx_download_events_app_name ON download_events(app_name);
+            CREATE INDEX IF NOT EXISTS idx_action_events_created_at ON action_events(created_at);
+            CREATE INDEX IF NOT EXISTS idx_action_events_domain ON action_events(domain);
+            CREATE INDEX IF NOT EXISTS idx_action_events_name ON action_events(name);
 
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,15 +94,15 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_download(&self, event: &DownloadEvent) -> Result<(), rusqlite::Error> {
+    pub fn insert_action(&self, event: &ActionEvent) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO download_events (app_name, version, platform, referrer)
+            "INSERT INTO action_events (domain, name, label, referrer)
              VALUES (?1, ?2, ?3, ?4)",
             params![
-                event.app_name,
-                event.version,
-                event.platform,
+                event.domain,
+                event.name,
+                event.label,
                 event.referrer,
             ],
         )?;
@@ -149,9 +150,9 @@ impl Database {
 
         let avg_views_per_day = total_views as f64 / days;
 
-        let total_downloads: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM download_events WHERE created_at >= ?1 AND created_at < ?2",
-            params![from, to],
+        let total_actions: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM action_events WHERE created_at >= ?1 AND created_at < ?2 AND domain = ?3",
+            params![from, to, domain],
             |row| row.get(0),
         )?;
 
@@ -159,7 +160,7 @@ impl Database {
             total_views,
             unique_visitors,
             avg_views_per_day,
-            total_downloads,
+            total_actions,
         })
     }
 
@@ -257,45 +258,45 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_download_stats(&self, from: &str, to: &str, tz_offset: i32) -> Result<DownloadStats, rusqlite::Error> {
+    pub fn get_action_stats(&self, from: &str, to: &str, tz_offset: i32, domain: &str) -> Result<ActionStats, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let tz_modifier = format!("{:+} minutes", tz_offset);
 
         let mut stmt = conn.prepare(
-            "SELECT date(created_at, ?3) as day, app_name, COUNT(*) as count
-             FROM download_events
-             WHERE created_at >= ?1 AND created_at < ?2
-             GROUP BY day, app_name
+            "SELECT date(created_at, ?3) as day, name, COUNT(*) as count
+             FROM action_events
+             WHERE created_at >= ?1 AND created_at < ?2 AND domain = ?4
+             GROUP BY day, name
              ORDER BY day",
         )?;
-        let daily: Vec<DownloadDailyStat> = stmt
-            .query_map(params![from, to, tz_modifier], |row| {
-                Ok(DownloadDailyStat {
+        let daily: Vec<ActionDailyStat> = stmt
+            .query_map(params![from, to, tz_modifier, domain], |row| {
+                Ok(ActionDailyStat {
                     date: row.get(0)?,
-                    app_name: row.get(1)?,
+                    name: row.get(1)?,
                     count: row.get(2)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut stmt2 = conn.prepare(
-            "SELECT app_name, platform, COUNT(*) as count
-             FROM download_events
-             WHERE created_at >= ?1 AND created_at < ?2
-             GROUP BY app_name, platform
+            "SELECT name, label, COUNT(*) as count
+             FROM action_events
+             WHERE created_at >= ?1 AND created_at < ?2 AND domain = ?3
+             GROUP BY name, label
              ORDER BY count DESC",
         )?;
-        let by_app: Vec<DownloadAppStat> = stmt2
-            .query_map(params![from, to], |row| {
-                Ok(DownloadAppStat {
-                    app_name: row.get(0)?,
-                    platform: row.get(1)?,
+        let by_name: Vec<ActionNameStat> = stmt2
+            .query_map(params![from, to, domain], |row| {
+                Ok(ActionNameStat {
+                    name: row.get(0)?,
+                    label: row.get(1)?,
                     count: row.get(2)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(DownloadStats { daily, by_app })
+        Ok(ActionStats { daily, by_name })
     }
 
     pub fn get_unique_visitors(&self, from: &str, to: &str) -> Result<Vec<DailyStat>, rusqlite::Error> {

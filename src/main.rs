@@ -92,7 +92,7 @@ async fn main() {
     // Tracker server (collection endpoints + tracker script for 3rd-party websites)
     let api_app = Router::new()
         .route("/track/event", post(handlers::collect_pageview))
-        .route("/track/download", post(handlers::collect_download))
+        .route("/track/action", post(handlers::collect_action))
         .route("/tracker.js", get(serve_tracker_js))
         .layer(cors)
         .with_state(state.clone());
@@ -105,7 +105,7 @@ async fn main() {
         .route("/dash/stats/referrers", get(handlers::stats_referrers))
         .route("/dash/stats/browsers", get(handlers::stats_browsers))
         .route("/dash/stats/os", get(handlers::stats_os))
-        .route("/dash/stats/downloads", get(handlers::stats_downloads))
+        .route("/dash/stats/actions", get(handlers::stats_actions))
         .route("/dash/stats/realtime", get(handlers::stats_realtime))
         .route("/dash/stats/domains", get(handlers::list_domains))
         .route("/dash/settings", get(handlers::get_settings))

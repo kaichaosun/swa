@@ -45,15 +45,15 @@ pub async fn collect_pageview(State(db): State<AppState>, body: Bytes) -> Status
     }
 }
 
-pub async fn collect_download(State(db): State<AppState>, body: Bytes) -> StatusCode {
-    let event: DownloadEvent = match serde_json::from_slice(&body) {
+pub async fn collect_action(State(db): State<AppState>, body: Bytes) -> StatusCode {
+    let event: ActionEvent = match serde_json::from_slice(&body) {
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
-    match db.insert_download(&event) {
+    match db.insert_action(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
-            tracing::error!("Failed to insert download: {}", e);
+            tracing::error!("Failed to insert action: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }
@@ -142,14 +142,14 @@ pub async fn stats_os(
         })
 }
 
-pub async fn stats_downloads(
+pub async fn stats_actions(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
-) -> Result<Json<ApiResponse<DownloadStats>>, StatusCode> {
-    db.get_download_stats(&range.from, &range.to, range.tz_offset)
+) -> Result<Json<ApiResponse<ActionStats>>, StatusCode> {
+    db.get_action_stats(&range.from, &range.to, range.tz_offset, &range.domain)
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
-            tracing::error!("Failed to get download stats: {}", e);
+            tracing::error!("Failed to get action stats: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })
 }

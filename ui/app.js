@@ -151,7 +151,7 @@
       document.getElementById('total-views').textContent = fmt(d.total_views);
       document.getElementById('unique-visitors').textContent = fmt(d.unique_visitors);
       document.getElementById('avg-views').textContent = d.avg_views_per_day.toFixed(1);
-      document.getElementById('total-downloads').textContent = fmt(d.total_downloads);
+      document.getElementById('total-actions').textContent = fmt(d.total_actions);
     }).catch(function () {});
   }
 
@@ -217,37 +217,37 @@
     }).catch(function () {});
   }
 
-  function loadDownloads() {
-    api('/dash/stats/downloads', apiRange(currentRange)).then(function (res) {
+  function loadActions() {
+    api('/dash/stats/actions', apiRange(currentRange)).then(function (res) {
       var data = res.data;
-      // Build daily chart grouped by app
-      var apps = {};
+      // Build daily chart grouped by action name
+      var actions = {};
       data.daily.forEach(function (r) {
-        if (!apps[r.app_name]) apps[r.app_name] = {};
-        apps[r.app_name][r.date] = r.count;
+        if (!actions[r.name]) actions[r.name] = {};
+        actions[r.name][r.date] = r.count;
       });
       var allDates = [];
       var seen = {};
       data.daily.forEach(function (r) {
         if (!seen[r.date]) { allDates.push(r.date); seen[r.date] = true; }
       });
-      var datasets = Object.keys(apps).map(function (name) {
+      var datasets = Object.keys(actions).map(function (name) {
         return {
           label: name,
-          data: allDates.map(function (d) { return apps[name][d] || 0; })
+          data: allDates.map(function (d) { return actions[name][d] || 0; })
         };
       });
-      var ctx = document.getElementById('chart-downloads').getContext('2d');
+      var ctx = document.getElementById('chart-actions').getContext('2d');
       if (allDates.length) {
         makeLineChart(ctx, allDates, datasets);
       }
 
-      // App table
-      var el = document.getElementById('table-downloads');
-      if (!data.by_app.length) { el.innerHTML = '<div class="empty">No downloads yet</div>'; return; }
-      var html = '<table><thead><tr><th>App</th><th>Platform</th><th>Downloads</th></tr></thead><tbody>';
-      data.by_app.forEach(function (r) {
-        html += '<tr><td>' + escHtml(r.app_name) + '</td><td>' + escHtml(r.platform) + '</td><td>' + fmt(r.count) + '</td></tr>';
+      // Action table
+      var el = document.getElementById('table-actions');
+      if (!data.by_name.length) { el.innerHTML = '<div class="empty">No actions yet</div>'; return; }
+      var html = '<table><thead><tr><th>Action</th><th>Label</th><th>Count</th></tr></thead><tbody>';
+      data.by_name.forEach(function (r) {
+        html += '<tr><td>' + escHtml(r.name) + '</td><td>' + escHtml(r.label) + '</td><td>' + fmt(r.count) + '</td></tr>';
       });
       html += '</tbody></table>';
       el.innerHTML = html;
@@ -301,7 +301,7 @@
     loadReferrers();
     loadBrowsers();
     loadOS();
-    loadDownloads();
+    loadActions();
   }
 
   // --- Controls ---

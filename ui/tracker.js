@@ -67,6 +67,27 @@
     }
   }
 
+  // Track a call-to-action event (e.g. download, login, signup).
+  // Usage: swa.action('download') or swa.action('login', 'google-oauth')
+  window.swa = {
+    action: function(name, label) {
+      var loc = window.location;
+      var data = {
+        domain: loc.hostname || (loc.protocol === 'file:' ? 'localhost' : 'unknown'),
+        name: name || '',
+        label: label || '',
+        referrer: document.referrer || ''
+      };
+      var url = api.replace(/\/$/, '') + '/track/action';
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        keepalive: true
+      }).catch(function() {});
+    }
+  };
+
   if (document.readyState === 'complete') {
     send();
   } else {
