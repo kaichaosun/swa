@@ -41,19 +41,12 @@
   // e.g. UTC+8 user's "2026-03-17" midnight local → "2026-03-16T16:00:00.000Z", tz_offset=480
   function apiRange(range) {
     var tz_offset = -new Date().getTimezoneOffset(); // +480 for UTC+8
-    var params = {
+    return {
       from: new Date(range.from + 'T00:00:00').toISOString(),
       to: new Date(range.to + 'T00:00:00').toISOString(),
-      tz_offset: tz_offset
+      tz_offset: tz_offset,
+      domain: currentDomain
     };
-    if (currentDomain) params.domain = currentDomain;
-    return params;
-  }
-
-  function realtimeParams() {
-    var params = {};
-    if (currentDomain) params.domain = currentDomain;
-    return params;
   }
 
   // --- API helpers ---
@@ -147,7 +140,7 @@
   // --- Render functions ---
 
   function loadRealtime() {
-    api('/dash/stats/realtime', realtimeParams()).then(function (res) {
+    api('/dash/stats/realtime', { domain: currentDomain }).then(function (res) {
       document.getElementById('realtime-count').textContent = res.data.active_visitors;
     }).catch(function () {});
   }
@@ -270,19 +263,25 @@
   // --- Site selector ---
 
   function loadDomains() {
-    api('/dash/stats/domains').then(function (res) {
-      if (!res) return;
+    return api('/dash/stats/domains').then(function (res) {
+      if (!res || !res.data.length) return;
       var select = document.getElementById('site-selector');
-      // Preserve current selection
-      var prev = select.value;
-      select.innerHTML = '<option value="">All Sites</option>';
+      var prev = currentDomain;
+      select.innerHTML = '';
       res.data.forEach(function (d) {
         var opt = document.createElement('option');
         opt.value = d.domain;
         opt.textContent = d.domain + ' (' + fmt(d.total_views) + ')';
         select.appendChild(opt);
       });
-      select.value = prev;
+      // Restore previous selection or pick first
+      var found = res.data.some(function (d) { return d.domain === prev; });
+      if (found) {
+        select.value = prev;
+      } else {
+        select.value = res.data[0].domain;
+      }
+      currentDomain = select.value;
     }).catch(function () {});
   }
 
@@ -294,6 +293,7 @@
   // --- Load all ---
 
   function loadAll() {
+    if (!currentDomain) return;
     loadRealtime();
     loadOverview();
     loadPageviews();
@@ -358,8 +358,9 @@
   // --- Init ---
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
-  loadDomains();
-  loadAll();
+  loadDomains().then(function () {
+    loadAll();
+  });
   loadSettings();
 
   // Auto-refresh every 60s
