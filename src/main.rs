@@ -107,6 +107,7 @@ async fn main() {
         .route("/dash/stats/os", get(handlers::stats_os))
         .route("/dash/stats/downloads", get(handlers::stats_downloads))
         .route("/dash/stats/realtime", get(handlers::stats_realtime))
+        .route("/dash/stats/domains", get(handlers::list_domains))
         .route("/dash/settings", get(handlers::get_settings))
         .route("/dash/settings", post(handlers::update_settings))
         .route("/", get(serve_index))

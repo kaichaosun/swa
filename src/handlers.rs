@@ -59,11 +59,22 @@ pub async fn collect_download(State(db): State<AppState>, body: Bytes) -> Status
     }
 }
 
+pub async fn list_domains(
+    State(db): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<DomainInfo>>>, StatusCode> {
+    db.get_domains()
+        .map(|data| Json(ApiResponse { data }))
+        .map_err(|e| {
+            tracing::error!("Failed to get domains: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
 pub async fn stats_overview(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<OverviewStats>>, StatusCode> {
-    db.get_overview_stats(&range.from, &range.to)
+    db.get_overview_stats(&range.from, &range.to, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get overview stats: {}", e);
@@ -75,7 +86,7 @@ pub async fn stats_pageviews(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<Vec<DailyStat>>>, StatusCode> {
-    db.get_pageview_stats(&range.from, &range.to, range.tz_offset)
+    db.get_pageview_stats(&range.from, &range.to, range.tz_offset, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get pageview stats: {}", e);
@@ -87,7 +98,7 @@ pub async fn stats_pages(
     State(db): State<AppState>,
     Query(range): Query<DateRangeWithLimit>,
 ) -> Result<Json<ApiResponse<Vec<PageStat>>>, StatusCode> {
-    db.get_top_pages(&range.from, &range.to, range.limit)
+    db.get_top_pages(&range.from, &range.to, range.limit, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get top pages: {}", e);
@@ -99,7 +110,7 @@ pub async fn stats_referrers(
     State(db): State<AppState>,
     Query(range): Query<DateRangeWithLimit>,
 ) -> Result<Json<ApiResponse<Vec<ReferrerStat>>>, StatusCode> {
-    db.get_top_referrers(&range.from, &range.to, range.limit)
+    db.get_top_referrers(&range.from, &range.to, range.limit, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get top referrers: {}", e);
@@ -111,7 +122,7 @@ pub async fn stats_browsers(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<Vec<BrowserStat>>>, StatusCode> {
-    db.get_browser_stats(&range.from, &range.to)
+    db.get_browser_stats(&range.from, &range.to, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get browser stats: {}", e);
@@ -123,7 +134,7 @@ pub async fn stats_os(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
 ) -> Result<Json<ApiResponse<Vec<OsStat>>>, StatusCode> {
-    db.get_os_stats(&range.from, &range.to)
+    db.get_os_stats(&range.from, &range.to, range.domain.as_deref())
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
             tracing::error!("Failed to get OS stats: {}", e);
@@ -145,8 +156,9 @@ pub async fn stats_downloads(
 
 pub async fn stats_realtime(
     State(db): State<AppState>,
+    Query(q): Query<RealtimeQuery>,
 ) -> Result<Json<ApiResponse<RealtimeStats>>, StatusCode> {
-    db.get_realtime_count()
+    db.get_realtime_count(q.domain.as_deref())
         .map(|count| {
             Json(ApiResponse {
                 data: RealtimeStats {

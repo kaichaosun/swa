@@ -38,6 +38,9 @@ pub struct DateRange {
     /// Minutes ahead of UTC (e.g. 480 for UTC+8). Used to group dates by local time.
     #[serde(default)]
     pub tz_offset: i32,
+    /// Optional domain filter. When set, only return stats for this domain.
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +51,9 @@ pub struct DateRangeWithLimit {
     pub limit: i64,
     #[serde(default)]
     pub tz_offset: i32,
+    /// Optional domain filter. When set, only return stats for this domain.
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 fn default_limit() -> i64 {
@@ -121,8 +127,22 @@ pub struct RealtimeStats {
 }
 
 #[derive(Debug, Serialize)]
+pub struct DomainInfo {
+    pub domain: String,
+    pub total_views: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ApiResponse<T: Serialize> {
     pub data: T,
+}
+
+// --- Realtime query ---
+
+#[derive(Debug, Deserialize)]
+pub struct RealtimeQuery {
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 // --- Settings ---

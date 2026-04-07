@@ -4,6 +4,7 @@
   var API = '';
   var charts = {};
   var refreshTimer;
+  var currentDomain = ''; // empty = all sites
 
   // --- Date range ---
 
@@ -40,11 +41,19 @@
   // e.g. UTC+8 user's "2026-03-17" midnight local → "2026-03-16T16:00:00.000Z", tz_offset=480
   function apiRange(range) {
     var tz_offset = -new Date().getTimezoneOffset(); // +480 for UTC+8
-    return {
+    var params = {
       from: new Date(range.from + 'T00:00:00').toISOString(),
       to: new Date(range.to + 'T00:00:00').toISOString(),
       tz_offset: tz_offset
     };
+    if (currentDomain) params.domain = currentDomain;
+    return params;
+  }
+
+  function realtimeParams() {
+    var params = {};
+    if (currentDomain) params.domain = currentDomain;
+    return params;
   }
 
   // --- API helpers ---
@@ -138,7 +147,7 @@
   // --- Render functions ---
 
   function loadRealtime() {
-    api('/dash/stats/realtime').then(function (res) {
+    api('/dash/stats/realtime', realtimeParams()).then(function (res) {
       document.getElementById('realtime-count').textContent = res.data.active_visitors;
     }).catch(function () {});
   }
@@ -258,6 +267,30 @@
     return d.innerHTML;
   }
 
+  // --- Site selector ---
+
+  function loadDomains() {
+    api('/dash/stats/domains').then(function (res) {
+      if (!res) return;
+      var select = document.getElementById('site-selector');
+      // Preserve current selection
+      var prev = select.value;
+      select.innerHTML = '<option value="">All Sites</option>';
+      res.data.forEach(function (d) {
+        var opt = document.createElement('option');
+        opt.value = d.domain;
+        opt.textContent = d.domain + ' (' + fmt(d.total_views) + ')';
+        select.appendChild(opt);
+      });
+      select.value = prev;
+    }).catch(function () {});
+  }
+
+  document.getElementById('site-selector').addEventListener('change', function () {
+    currentDomain = this.value;
+    loadAll();
+  });
+
   // --- Load all ---
 
   function loadAll() {
@@ -325,6 +358,7 @@
   // --- Init ---
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
+  loadDomains();
   loadAll();
   loadSettings();
 

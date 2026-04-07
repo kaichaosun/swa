@@ -9,7 +9,12 @@
 </head>
 <body>
   <div class="header">
-    <h1><span>SWA</span> Analytics</h1>
+    <div class="header-left">
+      <h1><span>SWA</span> Analytics</h1>
+      <select id="site-selector" class="site-selector">
+        <option value="">All Sites</option>
+      </select>
+    </div>
     <div class="controls">
       <button id="btn-logout" style="margin-right:1rem;background:transparent;border-color:var(--red);color:var(--red);">Logout</button>
       <button data-range="today" class="active">Today</button>

@@ -9,6 +9,16 @@ pub struct Database {
     conn: Mutex<Connection>,
 }
 
+/// Returns a SQL fragment and parameter value for optional domain filtering.
+/// When domain is Some, returns (" AND domain = ?N", domain_value).
+/// When None, returns ("", "%") — the param is unused but keeps parameter indices stable.
+fn domain_clause(domain: Option<&str>) -> (&'static str, String) {
+    match domain {
+        Some(d) => (" AND domain = ?3", d.to_string()),
+        None => ("", "%".to_string()),
+    }
+}
+
 impl Database {
     pub fn open(path: &Path) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(path)?;
@@ -108,19 +118,38 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_overview_stats(&self, from: &str, to: &str) -> Result<OverviewStats, rusqlite::Error> {
+    pub fn get_domains(&self) -> Result<Vec<DomainInfo>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT domain, COUNT(*) as total_views
+             FROM page_views
+             GROUP BY domain
+             ORDER BY total_views DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(DomainInfo {
+                domain: row.get(0)?,
+                total_views: row.get(1)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_overview_stats(&self, from: &str, to: &str, domain: Option<&str>) -> Result<OverviewStats, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
 
+        let (domain_filter, domain_param) = domain_clause(domain);
+
         let total_views: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM page_views WHERE created_at >= ?1 AND created_at < ?2",
-            params![from, to],
+            &format!("SELECT COUNT(*) FROM page_views WHERE created_at >= ?1 AND created_at < ?2{}", domain_filter),
+            params![from, to, domain_param],
             |row| row.get(0),
         )?;
 
         let unique_visitors: i64 = conn.query_row(
-            "SELECT COUNT(DISTINCT visitor_id) FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2 AND visitor_id != ''",
-            params![from, to],
+            &format!("SELECT COUNT(DISTINCT visitor_id) FROM page_views
+             WHERE created_at >= ?1 AND created_at < ?2 AND visitor_id != ''{}", domain_filter),
+            params![from, to, domain_param],
             |row| row.get(0),
         )?;
 
@@ -146,17 +175,19 @@ impl Database {
         })
     }
 
-    pub fn get_pageview_stats(&self, from: &str, to: &str, tz_offset: i32) -> Result<Vec<DailyStat>, rusqlite::Error> {
+    pub fn get_pageview_stats(&self, from: &str, to: &str, tz_offset: i32, domain: Option<&str>) -> Result<Vec<DailyStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let tz_modifier = format!("{:+} minutes", tz_offset);
+        let domain_filter = if domain.is_some() { " AND domain = ?4" } else { "" };
+        let domain_val = domain.unwrap_or("");
         let mut stmt = conn.prepare(
-            "SELECT date(created_at, ?3) as day, COUNT(*) as count
+            &format!("SELECT date(created_at, ?3) as day, COUNT(*) as count
              FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2
+             WHERE created_at >= ?1 AND created_at < ?2{}
              GROUP BY day
-             ORDER BY day",
+             ORDER BY day", domain_filter),
         )?;
-        let rows = stmt.query_map(params![from, to, tz_modifier], |row| {
+        let rows = stmt.query_map(params![from, to, tz_modifier, domain_val], |row| {
             Ok(DailyStat {
                 date: row.get(0)?,
                 count: row.get(1)?,
@@ -165,17 +196,19 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_top_pages(&self, from: &str, to: &str, limit: i64) -> Result<Vec<PageStat>, rusqlite::Error> {
+    pub fn get_top_pages(&self, from: &str, to: &str, limit: i64, domain: Option<&str>) -> Result<Vec<PageStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let domain_filter = if domain.is_some() { " AND domain = ?4" } else { "" };
+        let domain_val = domain.unwrap_or("");
         let mut stmt = conn.prepare(
-            "SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_id) as unique_visitors
+            &format!("SELECT path, COUNT(*) as views, COUNT(DISTINCT visitor_id) as unique_visitors
              FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2
+             WHERE created_at >= ?1 AND created_at < ?2{}
              GROUP BY path
              ORDER BY views DESC
-             LIMIT ?3",
+             LIMIT ?3", domain_filter),
         )?;
-        let rows = stmt.query_map(params![from, to, limit], |row| {
+        let rows = stmt.query_map(params![from, to, limit, domain_val], |row| {
             Ok(PageStat {
                 path: row.get(0)?,
                 views: row.get(1)?,
@@ -185,17 +218,19 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_top_referrers(&self, from: &str, to: &str, limit: i64) -> Result<Vec<ReferrerStat>, rusqlite::Error> {
+    pub fn get_top_referrers(&self, from: &str, to: &str, limit: i64, domain: Option<&str>) -> Result<Vec<ReferrerStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let domain_filter = if domain.is_some() { " AND domain = ?4" } else { "" };
+        let domain_val = domain.unwrap_or("");
         let mut stmt = conn.prepare(
-            "SELECT referrer, COUNT(*) as count
+            &format!("SELECT referrer, COUNT(*) as count
              FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2 AND referrer != ''
+             WHERE created_at >= ?1 AND created_at < ?2 AND referrer != ''{}
              GROUP BY referrer
              ORDER BY count DESC
-             LIMIT ?3",
+             LIMIT ?3", domain_filter),
         )?;
-        let rows = stmt.query_map(params![from, to, limit], |row| {
+        let rows = stmt.query_map(params![from, to, limit, domain_val], |row| {
             Ok(ReferrerStat {
                 referrer: row.get(0)?,
                 count: row.get(1)?,
@@ -204,16 +239,17 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_browser_stats(&self, from: &str, to: &str) -> Result<Vec<BrowserStat>, rusqlite::Error> {
+    pub fn get_browser_stats(&self, from: &str, to: &str, domain: Option<&str>) -> Result<Vec<BrowserStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let (domain_filter, domain_param) = domain_clause(domain);
         let mut stmt = conn.prepare(
-            "SELECT browser, COUNT(*) as count
+            &format!("SELECT browser, COUNT(*) as count
              FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2 AND browser != ''
+             WHERE created_at >= ?1 AND created_at < ?2 AND browser != ''{}
              GROUP BY browser
-             ORDER BY count DESC",
+             ORDER BY count DESC", domain_filter),
         )?;
-        let rows = stmt.query_map(params![from, to], |row| {
+        let rows = stmt.query_map(params![from, to, domain_param], |row| {
             Ok(BrowserStat {
                 browser: row.get(0)?,
                 count: row.get(1)?,
@@ -222,16 +258,17 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_os_stats(&self, from: &str, to: &str) -> Result<Vec<OsStat>, rusqlite::Error> {
+    pub fn get_os_stats(&self, from: &str, to: &str, domain: Option<&str>) -> Result<Vec<OsStat>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+        let (domain_filter, domain_param) = domain_clause(domain);
         let mut stmt = conn.prepare(
-            "SELECT os, COUNT(*) as count
+            &format!("SELECT os, COUNT(*) as count
              FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2 AND os != ''
+             WHERE created_at >= ?1 AND created_at < ?2 AND os != ''{}
              GROUP BY os
-             ORDER BY count DESC",
+             ORDER BY count DESC", domain_filter),
         )?;
-        let rows = stmt.query_map(params![from, to], |row| {
+        let rows = stmt.query_map(params![from, to, domain_param], |row| {
             Ok(OsStat {
                 os: row.get(0)?,
                 count: row.get(1)?,
@@ -374,14 +411,23 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_realtime_count(&self) -> Result<i64, rusqlite::Error> {
+    pub fn get_realtime_count(&self, domain: Option<&str>) -> Result<i64, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
-        conn.query_row(
-            "SELECT COUNT(DISTINCT visitor_id) FROM page_views
-             WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')
-             AND visitor_id != ''",
-            [],
-            |row| row.get(0),
-        )
+        match domain {
+            Some(d) => conn.query_row(
+                "SELECT COUNT(DISTINCT visitor_id) FROM page_views
+                 WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')
+                 AND visitor_id != '' AND domain = ?1",
+                params![d],
+                |row| row.get(0),
+            ),
+            None => conn.query_row(
+                "SELECT COUNT(DISTINCT visitor_id) FROM page_views
+                 WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')
+                 AND visitor_id != ''",
+                [],
+                |row| row.get(0),
+            ),
+        }
     }
 }
