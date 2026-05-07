@@ -34,7 +34,8 @@
     return null;
   }
 
-  var currentRange = getRange('today');
+  var savedPreset = localStorage.getItem('swa_range_preset') || 'today';
+  var currentRange = getRange(savedPreset);
 
   // Convert a local-date range {from, to} to UTC ISO datetimes for API queries,
   // and include the timezone offset (minutes ahead of UTC) for server-side date grouping.
@@ -317,7 +318,9 @@
     btn.addEventListener('click', function () {
       document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      currentRange = getRange(btn.getAttribute('data-range'));
+      var preset = btn.getAttribute('data-range');
+      currentRange = getRange(preset);
+      localStorage.setItem('swa_range_preset', preset);
       document.getElementById('date-from').value = currentRange.from;
       document.getElementById('date-to').value = addDays(currentRange.to, -1);
       loadAll();
@@ -384,6 +387,11 @@
   });
 
   // --- Init ---
+  document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
+  if (savedPreset !== 'custom') {
+    var activeBtn = document.querySelector('.controls button[data-range="' + savedPreset + '"]');
+    if (activeBtn) activeBtn.classList.add('active');
+  }
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
   loadDomains().then(function () {
