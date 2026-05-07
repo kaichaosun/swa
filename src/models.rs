@@ -165,6 +165,11 @@ pub struct SettingsUpdate {
     pub allow_localhost: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct DeleteDomainRequest {
+    pub domain: String,
+}
+
 // --- Auth ---
 
 #[derive(Debug, Deserialize)]

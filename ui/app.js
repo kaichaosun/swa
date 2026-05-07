@@ -350,6 +350,26 @@
     }).catch(function () {});
   }
 
+  document.getElementById('btn-delete-domain').addEventListener('click', function () {
+    if (!currentDomain) { alert('No site selected.'); return; }
+    var typed = window.prompt(
+      'This will permanently delete ALL page views and actions for "' + currentDomain + '".\n\n' +
+      'Type the domain name to confirm:'
+    );
+    if (typed === null) return;
+    if (typed !== currentDomain) { alert('Domain did not match. Nothing was deleted.'); return; }
+    postApi('/dash/data/delete', { domain: currentDomain }).then(function (r) {
+      if (r && r.ok) {
+        var deleted = currentDomain;
+        currentDomain = '';
+        loadDomains().then(function () { loadAll(); });
+        alert('Deleted all data for ' + deleted + '.');
+      } else {
+        alert('Delete failed.');
+      }
+    }).catch(function () { alert('Delete failed.'); });
+  });
+
   document.getElementById('toggle-localhost').addEventListener('change', function () {
     var checked = this.checked;
     postApi('/dash/settings', { allow_localhost: checked }).then(function (r) {

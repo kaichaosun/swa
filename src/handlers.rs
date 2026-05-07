@@ -291,6 +291,51 @@ pub async fn update_settings(State(db): State<AppState>, body: Bytes) -> impl In
     }
 }
 
+pub async fn delete_domain_data(State(db): State<AppState>, body: Bytes) -> impl IntoResponse {
+    let req: DeleteDomainRequest = match serde_json::from_slice(&body) {
+        Ok(r) => r,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Invalid request".into(),
+                }),
+            )
+        }
+    };
+
+    if req.domain.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(AuthResponse {
+                success: false,
+                message: "Domain is required".into(),
+            }),
+        );
+    }
+
+    match db.delete_domain_data(&req.domain) {
+        Ok(n) => (
+            StatusCode::OK,
+            Json(AuthResponse {
+                success: true,
+                message: format!("Deleted {} rows for {}", n, req.domain),
+            }),
+        ),
+        Err(e) => {
+            tracing::error!("Failed to delete domain data: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AuthResponse {
+                    success: false,
+                    message: "Server error".into(),
+                }),
+            )
+        }
+    }
+}
+
 // --- Auth handlers ---
 
 pub async fn register(State(db): State<AppState>, body: Bytes) -> impl IntoResponse {

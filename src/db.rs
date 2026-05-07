@@ -100,6 +100,15 @@ impl Database {
         Ok(())
     }
 
+    pub fn delete_domain_data(&self, domain: &str) -> Result<usize, rusqlite::Error> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let pv = tx.execute("DELETE FROM page_views WHERE domain = ?1", params![domain])?;
+        let ae = tx.execute("DELETE FROM action_events WHERE domain = ?1", params![domain])?;
+        tx.commit()?;
+        Ok(pv + ae)
+    }
+
     pub fn get_domains(&self) -> Result<Vec<DomainInfo>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(

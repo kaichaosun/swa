@@ -113,6 +113,7 @@ async fn main() {
         .route("/dash/stats/domains", get(handlers::list_domains))
         .route("/dash/settings", get(handlers::get_settings))
         .route("/dash/settings", post(handlers::update_settings))
+        .route("/dash/data/delete", post(handlers::delete_domain_data))
         .route("/", get(serve_index))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth));
 
