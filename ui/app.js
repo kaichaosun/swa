@@ -199,10 +199,14 @@
     }).catch(function () {});
   }
 
+  function clearChart(id) {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  }
+
   function loadBrowsers() {
     api('/dash/stats/browsers', apiRange(currentRange)).then(function (res) {
       var data = res.data;
-      if (!data.length) return;
+      if (!data.length) { clearChart('chart-browsers'); return; }
       var ctx = document.getElementById('chart-browsers').getContext('2d');
       makePieChart(ctx, data.map(function (r) { return r.browser; }), data.map(function (r) { return r.count; }));
     }).catch(function () {});
@@ -211,7 +215,7 @@
   function loadOS() {
     api('/dash/stats/os', apiRange(currentRange)).then(function (res) {
       var data = res.data;
-      if (!data.length) return;
+      if (!data.length) { clearChart('chart-os'); return; }
       var ctx = document.getElementById('chart-os').getContext('2d');
       makePieChart(ctx, data.map(function (r) { return r.os; }), data.map(function (r) { return r.count; }));
     }).catch(function () {});
@@ -237,9 +241,11 @@
           data: allDates.map(function (d) { return actions[name][d] || 0; })
         };
       });
-      var ctx = document.getElementById('chart-actions').getContext('2d');
       if (allDates.length) {
+        var ctx = document.getElementById('chart-actions').getContext('2d');
         makeLineChart(ctx, allDates, datasets);
+      } else {
+        clearChart('chart-actions');
       }
 
       // Action table
