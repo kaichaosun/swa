@@ -7,7 +7,8 @@ A lightweight, single-binary web analytics tool built with Rust and SQLite. No e
 - **Single binary** — UI, API, and tracker bundled into one executable via `rust-embed`
 - **SQLite storage** — WAL mode, zero-config, file-based database
 - **Two-port architecture** — separate ports for the public tracker API and the authenticated dashboard
-- **Pageview + download tracking** — out of the box
+- **Pageview + CTA action tracking** — page views and custom named actions (login, purchase, etc.)
+- **Multi-domain** — track multiple sites from one instance, switch between them in the dashboard
 - **Privacy-friendly** — respects Do-Not-Track; daily-rotating fingerprints (no cookies for visitors)
 - **Auth-protected dashboard** — cookie-based sessions with argon2 password hashing
 - **Dark-themed dashboard** — real-time stats, date ranges, Chart.js graphs, auto-refresh
@@ -37,15 +38,18 @@ Add one script tag to any website you want to track:
 
 The tracker (~1 KB) automatically collects page path, referrer, browser, OS, and screen size.
 
-### Download Tracking
+### CTA Action Tracking
 
-```html
-<a href="app.dmg"
-   onclick="navigator.sendBeacon('https://your-server:3330/track/download',
-     JSON.stringify({app_name:'MyApp',version:'1.0',platform:'macos'}))">
-  Download for macOS
-</a>
+Track named events (logins, purchases, button clicks, etc.) via the `window.swa` global exposed by the tracker:
+
+```js
+// swa.action(name, label)
+window.swa.action('login', 'google')
+window.swa.action('purchase', 'monthly')
+window.swa.action('download', 'macos')
 ```
+
+Both arguments are free-form strings. `label` is optional. Events appear in the **Actions** section of the dashboard.
 
 ## API Reference
 
@@ -61,21 +65,25 @@ SWA runs two servers:
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/track/event` | Record a pageview |
-| `POST` | `/track/download` | Record a download |
+| `POST` | `/track/action` | Record a named CTA action |
 | `GET` | `/tracker.js` | Serve the tracking script |
 
 ### Dashboard Endpoints (UI — port 3331, auth required)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/dash/stats/overview` | Total views, visitors, bounce rate |
+| `GET` | `/dash/stats/overview` | Total views, unique visitors, avg views/day, total actions |
 | `GET` | `/dash/stats/pageviews` | Daily pageview time series |
 | `GET` | `/dash/stats/pages` | Top pages |
 | `GET` | `/dash/stats/referrers` | Top referrers |
 | `GET` | `/dash/stats/browsers` | Browser breakdown |
 | `GET` | `/dash/stats/os` | OS breakdown |
-| `GET` | `/dash/stats/downloads` | Download stats |
+| `GET` | `/dash/stats/actions` | Action stats (daily series + totals by name) |
 | `GET` | `/dash/stats/realtime` | Active visitors in last 5 min |
+| `GET` | `/dash/stats/domains` | List tracked domains with total view counts |
+| `GET` | `/dash/settings` | Get settings (e.g. allow_localhost) |
+| `POST` | `/dash/settings` | Update settings |
+| `POST` | `/dash/data/delete` | Delete all data for a domain |
 
 ### Auth Endpoints (UI — port 3331, public)
 
@@ -95,7 +103,7 @@ src/
   handlers.rs    # All API endpoint handlers
   auth.rs        # Cookie-based session middleware
 ui/
-  tracker.js     # Lightweight tracking script (DNT-aware)
+  tracker.js     # Lightweight tracking script (DNT-aware, exposes window.swa)
   index.html     # Dashboard SPA
   login.html     # Login / register page
   app.js         # Dashboard logic (charts, tables, date ranges)
