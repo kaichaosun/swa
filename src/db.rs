@@ -9,6 +9,18 @@ pub struct Database {
     conn: Mutex<Connection>,
 }
 
+/// Ordered list of schema migrations. Each entry is (version, name, sql).
+/// Versions must be strictly increasing and never reused. To add a migration,
+/// drop a new file in `migrations/` and append a line here — never edit a
+/// migration that has shipped.
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (
+        1,
+        "initial_schema",
+        include_str!("../migrations/0001_initial_schema.sql"),
+    ),
+];
+
 impl Database {
     pub fn open(path: &Path) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(path)?;
@@ -21,58 +33,37 @@ impl Database {
     }
 
     fn migrate(&self) -> Result<(), rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
+        let mut conn = self.conn.lock().unwrap();
+
         conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS page_views (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT NOT NULL,
-                path TEXT NOT NULL,
-                referrer TEXT NOT NULL DEFAULT '',
-                browser TEXT NOT NULL DEFAULT '',
-                os TEXT NOT NULL DEFAULT '',
-                screen TEXT NOT NULL DEFAULT '',
-                visitor_id TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_page_views_created_at ON page_views(created_at);
-            CREATE INDEX IF NOT EXISTS idx_page_views_domain ON page_views(domain);
-            CREATE INDEX IF NOT EXISTS idx_page_views_visitor_id ON page_views(visitor_id);
-
-            CREATE TABLE IF NOT EXISTS action_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT NOT NULL,
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
-                label TEXT NOT NULL DEFAULT '',
-                referrer TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_action_events_created_at ON action_events(created_at);
-            CREATE INDEX IF NOT EXISTS idx_action_events_domain ON action_events(domain);
-            CREATE INDEX IF NOT EXISTS idx_action_events_name ON action_events(name);
-
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS sessions (
-                token TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id),
-                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                expires_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-            ",
+                applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );",
         )?;
+
+        for (version, name, sql) in MIGRATIONS {
+            let already_applied: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?1)",
+                params![version],
+                |row| row.get(0),
+            )?;
+            if already_applied {
+                continue;
+            }
+
+            let tx = conn.transaction()?;
+            tx.execute_batch(sql)?;
+            tx.execute(
+                "INSERT INTO schema_migrations (version, name) VALUES (?1, ?2)",
+                params![version, name],
+            )?;
+            tx.commit()?;
+
+            tracing::info!("applied migration {:04} {}", version, name);
+        }
+
         Ok(())
     }
 
