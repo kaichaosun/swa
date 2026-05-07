@@ -28,6 +28,20 @@ pub struct ActionEvent {
     pub referrer: String,
 }
 
+/// Legacy payload from pre-rename clients still calling POST /track/download.
+/// Mapped into ActionEvent by the legacy shim handler. Remove once traffic on
+/// /track/download has gone to zero.
+#[derive(Debug, Deserialize)]
+pub struct LegacyDownloadEvent {
+    pub app_name: String,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub platform: String,
+    #[serde(default)]
+    pub referrer: String,
+}
+
 // --- Query parameters ---
 
 #[derive(Debug, Deserialize)]

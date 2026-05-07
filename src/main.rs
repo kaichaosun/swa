@@ -93,6 +93,9 @@ async fn main() {
     let api_app = Router::new()
         .route("/track/event", post(handlers::collect_pageview))
         .route("/track/action", post(handlers::collect_action))
+        // Legacy: pre-rename clients still POST {app_name, version, platform} here.
+        // Remove once /track/download traffic in access logs has dropped to zero.
+        .route("/track/download", post(handlers::collect_download_legacy))
         .route("/tracker.js", get(serve_tracker_js))
         .layer(cors)
         .with_state(state.clone());
