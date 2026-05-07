@@ -4,7 +4,7 @@
   var API = '';
   var charts = {};
   var refreshTimer;
-  var currentDomain = ''; // empty = all sites
+  var currentDomain = localStorage.getItem('swa_domain') || ''; // empty = all sites
 
   // --- Date range ---
 
@@ -293,6 +293,7 @@
 
   document.getElementById('site-selector').addEventListener('change', function () {
     currentDomain = this.value;
+    localStorage.setItem('swa_domain', currentDomain);
     loadAll();
   });
 
@@ -362,6 +363,7 @@
       if (r && r.ok) {
         var deleted = currentDomain;
         currentDomain = '';
+        localStorage.removeItem('swa_domain');
         loadDomains().then(function () { loadAll(); });
         alert('Deleted all data for ' + deleted + '.');
       } else {
