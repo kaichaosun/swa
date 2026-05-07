@@ -19,7 +19,20 @@ pub struct PageViewEvent {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DownloadEvent {
+pub struct ActionEvent {
+    pub domain: String,
+    pub name: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub referrer: String,
+}
+
+/// Legacy payload from pre-rename clients still calling POST /track/download.
+/// Mapped into ActionEvent by the legacy shim handler. Remove once traffic on
+/// /track/download has gone to zero.
+#[derive(Debug, Deserialize)]
+pub struct LegacyDownloadEvent {
     pub app_name: String,
     #[serde(default)]
     pub version: String,
@@ -63,7 +76,7 @@ pub struct OverviewStats {
     pub total_views: i64,
     pub unique_visitors: i64,
     pub avg_views_per_day: f64,
-    pub total_downloads: i64,
+    pub total_actions: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,22 +111,22 @@ pub struct OsStat {
 }
 
 #[derive(Debug, Serialize)]
-pub struct DownloadDailyStat {
+pub struct ActionDailyStat {
     pub date: String,
-    pub app_name: String,
+    pub name: String,
     pub count: i64,
 }
 
 #[derive(Debug, Serialize)]
-pub struct DownloadStats {
-    pub daily: Vec<DownloadDailyStat>,
-    pub by_app: Vec<DownloadAppStat>,
+pub struct ActionStats {
+    pub daily: Vec<ActionDailyStat>,
+    pub by_name: Vec<ActionNameStat>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct DownloadAppStat {
-    pub app_name: String,
-    pub platform: String,
+pub struct ActionNameStat {
+    pub name: String,
+    pub label: String,
     pub count: i64,
 }
 

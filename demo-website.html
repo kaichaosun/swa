@@ -4,47 +4,18 @@
   <meta charset="UTF-8">
   <title>Test Page</title>
 
-  <!-- Embed tracker.js for page view tracking -->
+  <!-- Embed tracker.js: page views are auto-tracked, and window.swa.action()
+       becomes available for call-to-action tracking. -->
   <script defer data-api="http://127.0.0.1:3330" src="http://127.0.0.1:3330/tracker.js"></script>
-
-  <!-- Define trackDownload in HTML -->
-  <script>
-    function trackDownload(app, version, platform) {
-      const api = "http://127.0.0.1:3330/track/download"; // your backend
-      const data = {
-        domain: window.location.hostname,
-        path: window.location.pathname,
-        browser: navigator.userAgent,
-        os: navigator.platform,
-        screen: screen.width + "x" + screen.height,
-        event: "download",
-        app_name: app,
-        version: version,
-        platform: platform,
-        timestamp: new Date().toISOString()
-      };
-
-      // Use navigator.sendBeacon if available (non-blocking)
-      // if (navigator.sendBeacon) {
-      //   navigator.sendBeacon(api, JSON.stringify(data));
-      //   console.log("Download beacon sent:", data);
-      // } else {
-        // fallback to fetch
-        fetch(api, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          keepalive: true
-        }).catch(() => {});
-        console.log("Download fetch sent:", data);
-      // }
-    }
-  </script>
 </head>
 <body>
   <h1>Analytics Test</h1>
 
-  <!-- Download link -->
-  <a href="app.dmg" onclick="trackDownload('MyApp','2.0','macos')">Download App</a>
+  <!-- Download: name="download", label="<platform> <version>" -->
+  <a href="app.dmg" onclick="swa.action('download', 'macos 2.0')">Download App</a>
+
+  <!-- Other call-to-action examples -->
+  <button onclick="swa.action('signup')">Sign up</button>
+  <button onclick="swa.action('login', 'google-oauth')">Log in with Google</button>
 </body>
 </html>

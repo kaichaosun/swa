@@ -5,7 +5,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::body::Bytes;
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json, Response};
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
@@ -45,17 +45,81 @@ pub async fn collect_pageview(State(db): State<AppState>, body: Bytes) -> Status
     }
 }
 
-pub async fn collect_download(State(db): State<AppState>, body: Bytes) -> StatusCode {
-    let event: DownloadEvent = match serde_json::from_slice(&body) {
+pub async fn collect_action(State(db): State<AppState>, body: Bytes) -> StatusCode {
+    let event: ActionEvent = match serde_json::from_slice(&body) {
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
-    match db.insert_download(&event) {
+    match db.insert_action(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
-            tracing::error!("Failed to insert download: {}", e);
+            tracing::error!("Failed to insert action: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         }
+    }
+}
+
+/// Legacy shim for clients still calling POST /track/download with the old
+/// {app_name, version, platform} payload. Derives `domain` from the Origin or
+/// Referer header (old clients didn't send it) and writes into action_events.
+/// Remove this handler and its route once /track/download traffic is zero.
+pub async fn collect_download_legacy(
+    State(db): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> StatusCode {
+    let legacy: LegacyDownloadEvent = match serde_json::from_slice(&body) {
+        Ok(e) => e,
+        Err(_) => return StatusCode::BAD_REQUEST,
+    };
+
+    let domain = derive_domain_from_headers(&headers).unwrap_or_else(|| "unknown".to_string());
+
+    let label = if legacy.version.is_empty() {
+        legacy.platform.clone()
+    } else if legacy.platform.is_empty() {
+        legacy.version.clone()
+    } else {
+        format!("{} {}", legacy.platform, legacy.version)
+    };
+
+    let event = ActionEvent {
+        domain,
+        name: legacy.app_name,
+        label,
+        referrer: legacy.referrer,
+    };
+
+    tracing::warn!(
+        "legacy /track/download hit (domain={}, name={}); update client to swa.action()",
+        event.domain,
+        event.name,
+    );
+
+    match db.insert_action(&event) {
+        Ok(_) => StatusCode::ACCEPTED,
+        Err(e) => {
+            tracing::error!("Failed to insert legacy download: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
+
+fn derive_domain_from_headers(headers: &HeaderMap) -> Option<String> {
+    let raw = headers
+        .get("origin")
+        .or_else(|| headers.get("referer"))
+        .and_then(|v| v.to_str().ok())?;
+    // Strip scheme
+    let after_scheme = raw.split_once("://").map(|(_, rest)| rest).unwrap_or(raw);
+    // Take host[:port], drop path
+    let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
+    // Drop port
+    let host = host_port.split(':').next().unwrap_or(host_port);
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
     }
 }
 
@@ -142,14 +206,14 @@ pub async fn stats_os(
         })
 }
 
-pub async fn stats_downloads(
+pub async fn stats_actions(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
-) -> Result<Json<ApiResponse<DownloadStats>>, StatusCode> {
-    db.get_download_stats(&range.from, &range.to, range.tz_offset)
+) -> Result<Json<ApiResponse<ActionStats>>, StatusCode> {
+    db.get_action_stats(&range.from, &range.to, range.tz_offset, &range.domain)
         .map(|data| Json(ApiResponse { data }))
         .map_err(|e| {
-            tracing::error!("Failed to get download stats: {}", e);
+            tracing::error!("Failed to get action stats: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })
 }
