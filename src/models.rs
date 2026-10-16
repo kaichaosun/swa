@@ -16,6 +16,12 @@ pub struct PageViewEvent {
     pub screen: String,
     #[serde(default)]
     pub visitor_id: String,
+    #[serde(default)]
+    pub utm_source: String,
+    #[serde(default)]
+    pub utm_medium: String,
+    #[serde(default)]
+    pub utm_campaign: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +101,14 @@ pub struct PageStat {
 #[derive(Debug, Serialize)]
 pub struct ReferrerStat {
     pub referrer: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CampaignStat {
+    pub source: String,
+    pub medium: String,
+    pub campaign: String,
     pub count: i64,
 }
 

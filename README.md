@@ -36,7 +36,7 @@ Add one script tag to any website you want to track:
 <script defer data-api="https://your-server:3330" src="https://your-server:3330/tracker.js"></script>
 ```
 
-The tracker (~1 KB) automatically collects page path, referrer, browser, OS, and screen size.
+The tracker (~1 KB) automatically collects page path, referrer, browser, OS, and screen size, plus `utm_source`, `utm_medium` and `utm_campaign` when the page's URL carries them.
 
 ### CTA Action Tracking
 
@@ -76,6 +76,7 @@ SWA runs two servers:
 | `GET` | `/dash/stats/pageviews` | Daily pageview time series |
 | `GET` | `/dash/stats/pages` | Top pages |
 | `GET` | `/dash/stats/referrers` | Top referrers |
+| `GET` | `/dash/stats/campaigns` | Top UTM source / medium / campaign combinations |
 | `GET` | `/dash/stats/browsers` | Browser breakdown |
 | `GET` | `/dash/stats/os` | OS breakdown |
 | `GET` | `/dash/stats/actions` | Action stats (daily series + totals by name) |

@@ -200,6 +200,24 @@
     }).catch(function () {});
   }
 
+  function loadCampaigns() {
+    api('/dash/stats/campaigns', Object.assign({}, apiRange(currentRange), { limit: 10 })).then(function (res) {
+      var data = res.data;
+      var el = document.getElementById('table-campaigns');
+      if (!data.length) { el.innerHTML = '<div class="empty">No data yet</div>'; return; }
+      var maxCount = data[0].count;
+      var html = '<table><thead><tr><th>Source</th><th>Medium</th><th>Campaign</th><th>Visits</th></tr></thead><tbody>';
+      data.forEach(function (c) {
+        var pct = maxCount ? (c.count / maxCount * 100) : 0;
+        html += '<tr><td class="bar-cell"><div class="bar-fill" style="width:' + pct + '%"></div><span>' + escHtml(c.source) + '</span></td>';
+        html += '<td>' + escHtml(c.medium) + '</td><td>' + escHtml(c.campaign) + '</td>';
+        html += '<td>' + fmt(c.count) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }).catch(function () {});
+  }
+
   function clearChart(id) {
     if (charts[id]) { charts[id].destroy(); delete charts[id]; }
   }
@@ -307,6 +325,7 @@
     loadPageviews();
     loadPages();
     loadReferrers();
+    loadCampaigns();
     loadBrowsers();
     loadOS();
     loadActions();

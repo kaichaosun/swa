@@ -44,6 +44,7 @@
 
   function send() {
     var loc = window.location;
+    var query = new URLSearchParams(loc.search);
     var data = {
       domain: loc.hostname || (loc.protocol === 'file:' ? 'localhost' : 'unknown'),
       path: loc.pathname,
@@ -51,7 +52,10 @@
       browser: getBrowser(),
       os: getOS(),
       screen: screen.width + 'x' + screen.height,
-      visitor_id: getVisitorId()
+      visitor_id: getVisitorId(),
+      utm_source: query.get('utm_source') || '',
+      utm_medium: query.get('utm_medium') || '',
+      utm_campaign: query.get('utm_campaign') || ''
     };
     var url = api.replace(/\/$/, '') + '/track/event';
     var body = new Blob([JSON.stringify(data)], { type: 'text/plain' });

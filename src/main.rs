@@ -106,6 +106,7 @@ async fn main() {
         .route("/dash/stats/pageviews", get(handlers::stats_pageviews))
         .route("/dash/stats/pages", get(handlers::stats_pages))
         .route("/dash/stats/referrers", get(handlers::stats_referrers))
+        .route("/dash/stats/campaigns", get(handlers::stats_campaigns))
         .route("/dash/stats/browsers", get(handlers::stats_browsers))
         .route("/dash/stats/os", get(handlers::stats_os))
         .route("/dash/stats/actions", get(handlers::stats_actions))

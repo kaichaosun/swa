@@ -19,6 +19,7 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "initial_schema",
         include_str!("../migrations/0001_initial_schema.sql"),
     ),
+    (2, "utm", include_str!("../migrations/0002_utm.sql")),
 ];
 
 impl Database {
@@ -70,8 +71,8 @@ impl Database {
     pub fn insert_page_view(&self, event: &PageViewEvent) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO page_views (domain, path, referrer, browser, os, screen, visitor_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO page_views (domain, path, referrer, browser, os, screen, visitor_id, utm_source, utm_medium, utm_campaign)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 event.domain,
                 event.path,
@@ -80,6 +81,9 @@ impl Database {
                 event.os,
                 event.screen,
                 event.visitor_id,
+                event.utm_source,
+                event.utm_medium,
+                event.utm_campaign,
             ],
         )?;
         Ok(())
@@ -217,6 +221,27 @@ impl Database {
             Ok(ReferrerStat {
                 referrer: row.get(0)?,
                 count: row.get(1)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_top_campaigns(&self, from: &str, to: &str, limit: i64, domain: &str) -> Result<Vec<CampaignStat>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT utm_source, utm_medium, utm_campaign, COUNT(*) as count
+             FROM page_views
+             WHERE created_at >= ?1 AND created_at < ?2 AND utm_source != '' AND domain = ?4
+             GROUP BY utm_source, utm_medium, utm_campaign
+             ORDER BY count DESC
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![from, to, limit, domain], |row| {
+            Ok(CampaignStat {
+                source: row.get(0)?,
+                medium: row.get(1)?,
+                campaign: row.get(2)?,
+                count: row.get(3)?,
             })
         })?;
         rows.collect()

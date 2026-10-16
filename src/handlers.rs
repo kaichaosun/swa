@@ -182,6 +182,18 @@ pub async fn stats_referrers(
         })
 }
 
+pub async fn stats_campaigns(
+    State(db): State<AppState>,
+    Query(range): Query<DateRangeWithLimit>,
+) -> Result<Json<ApiResponse<Vec<CampaignStat>>>, StatusCode> {
+    db.get_top_campaigns(&range.from, &range.to, range.limit, &range.domain)
+        .map(|data| Json(ApiResponse { data }))
+        .map_err(|e| {
+            tracing::error!("Failed to get top campaigns: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
 pub async fn stats_browsers(
     State(db): State<AppState>,
     Query(range): Query<DateRange>,
