@@ -79,16 +79,21 @@ fn get_allowed_sites(db: &Database) -> Result<Vec<String>, rusqlite::Error> {
         .unwrap_or_default())
 }
 
+fn get_bool_setting(db: &Database, key: &str) -> Result<bool, rusqlite::Error> {
+    Ok(db.get_setting(key)?.as_deref() == Some("true"))
+}
+
 /// Whether an incoming event for `domain` should be stored. Local hosts are governed
-/// by the allow_localhost toggle; public hosts by the allowed-sites list (empty = all).
+/// by the allow_localhost toggle; public hosts are all accepted unless restrict_sites
+/// is on, in which case only hosts on the allowed-sites list are.
 fn accepts_domain(db: &Database, domain: &str) -> bool {
     if is_local_host(domain) {
-        return db.get_setting("allow_localhost").ok().flatten().as_deref() == Some("true");
+        return get_bool_setting(db, "allow_localhost").unwrap_or(false);
     }
-    let allowed = get_allowed_sites(db).unwrap_or_default();
-    if allowed.is_empty() {
+    if !get_bool_setting(db, "restrict_sites").unwrap_or(false) {
         return true;
     }
+    let allowed = get_allowed_sites(db).unwrap_or_default();
     let host = normalize_site(domain);
     allowed.iter().any(|entry| site_matches(entry, &host))
 }
@@ -259,7 +264,8 @@ pub async fn get_settings(
 ) -> Result<Json<ApiResponse<SettingsResponse>>, StatusCode> {
     let load = || -> Result<SettingsResponse, rusqlite::Error> {
         Ok(SettingsResponse {
-            allow_localhost: db.get_setting("allow_localhost")?.as_deref() == Some("true"),
+            allow_localhost: get_bool_setting(&db, "allow_localhost")?,
+            restrict_sites: get_bool_setting(&db, "restrict_sites")?,
             allowed_sites: get_allowed_sites(&db)?,
         })
     };
@@ -286,6 +292,9 @@ pub async fn update_settings(State(db): State<AppState>, body: Bytes) -> impl In
     let save = || -> Result<(), rusqlite::Error> {
         if let Some(allow) = req.allow_localhost {
             db.set_setting("allow_localhost", if allow { "true" } else { "false" })?;
+        }
+        if let Some(restrict) = req.restrict_sites {
+            db.set_setting("restrict_sites", if restrict { "true" } else { "false" })?;
         }
         if let Some(sites) = &req.allowed_sites {
             let mut normalized: Vec<String> = sites

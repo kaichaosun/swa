@@ -8,36 +8,30 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="header">
-    <div class="header-left">
-      <h1><span>SWA</span> Analytics</h1>
-    </div>
-    <div class="controls">
-      <button id="btn-logout" style="margin-right:1rem;background:transparent;border-color:var(--red);color:var(--red);">Logout</button>
-      <div class="range-controls">
-        <button data-range="today" class="active">Today</button>
-        <button data-range="7d">7 days</button>
-        <button data-range="30d">30 days</button>
-        <input type="date" id="date-from">
-        <input type="date" id="date-to">
-        <button id="btn-custom">Apply</button>
-      </div>
-    </div>
-  </div>
-
   <div class="layout">
   <aside class="sidebar">
+    <h1 class="brand"><span>SWA</span> Analytics</h1>
     <div class="sidebar-title">Sites <span id="site-count" class="site-count"></span></div>
     <input type="search" id="site-filter" class="site-filter" placeholder="Filter sites..." autocomplete="off">
     <nav id="site-list" class="site-list"></nav>
-    <a href="#settings" id="nav-settings" class="sidebar-settings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Settings
-    </a>
+    <div class="sidebar-footer">
+      <a href="#settings" id="nav-settings" class="sidebar-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </a>
+      <button type="button" id="btn-logout" class="sidebar-link sidebar-logout">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
+    </div>
   </aside>
 
-  <div class="container" id="view-settings" hidden>
-    <h2 class="page-title">Settings</h2>
+  <main class="main">
+  <div id="view-settings" hidden>
+    <div class="page-header">
+      <h2 class="page-title">Settings</h2>
+    </div>
+    <div class="container">
 
     <div class="section">
       <div class="section-title">Local development</div>
@@ -55,18 +49,51 @@
 
     <div class="section">
       <div class="section-title">Allowed sites</div>
-      <p class="setting-hint">Only events from these sites are recorded. Leave the list empty to accept events from any site. Use <code>*.example.com</code> to allow every subdomain. Local addresses follow the localhost setting above.</p>
-      <form id="allowed-form" class="allowed-form">
-        <input type="text" id="allowed-input" class="text-input" placeholder="example.com" list="known-sites" autocomplete="off">
-        <datalist id="known-sites"></datalist>
-        <button type="submit" class="btn">Add</button>
-      </form>
-      <div id="allowed-list" class="allowed-list"></div>
-      <div id="allowed-warning" class="allowed-warning" hidden></div>
+      <p class="setting-hint">Which public websites may send events to this server. Local addresses follow the localhost setting above.</p>
+      <div class="radio-group">
+        <label class="radio-option">
+          <input type="radio" name="site-mode" value="any" id="mode-any">
+          <span>
+            <span class="radio-label">Allow any website</span>
+            <span class="setting-hint">Events from every website running the tracker are recorded.</span>
+          </span>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="site-mode" value="list" id="mode-list">
+          <span>
+            <span class="radio-label">Only allow listed websites</span>
+            <span class="setting-hint">Events from any other website are dropped.</span>
+          </span>
+        </label>
+      </div>
+
+      <div id="allowed-panel" class="allowed-panel">
+        <form id="allowed-form" class="allowed-form">
+          <input type="text" id="allowed-input" class="text-input" placeholder="example.com, blog.example.com" autocomplete="off">
+          <button type="submit" class="btn">Add</button>
+        </form>
+        <p class="setting-hint">Separate several sites with commas or spaces. Use <code>*.example.com</code> to allow every subdomain.</p>
+        <div id="suggested-sites" class="suggested-sites" hidden></div>
+        <div id="allowed-list" class="allowed-list"></div>
+        <div id="allowed-warning" class="allowed-warning" hidden></div>
+      </div>
+    </div>
     </div>
   </div>
 
-  <div class="container" id="view-dashboard">
+  <div id="view-dashboard">
+    <div class="page-header">
+      <h2 class="page-title" id="site-title"></h2>
+      <div class="range-controls">
+        <button data-range="today" class="active">Today</button>
+        <button data-range="7d">7 days</button>
+        <button data-range="30d">30 days</button>
+        <input type="date" id="date-from">
+        <input type="date" id="date-to">
+        <button id="btn-custom">Apply</button>
+      </div>
+    </div>
+    <div class="container">
     <div class="realtime-bar">
       <div class="realtime-dot"></div>
       <span class="realtime-count" id="realtime-count">0</span>
@@ -137,10 +164,12 @@
           <span>Delete site data</span>
           <span class="setting-hint">Permanently removes all page views and actions for the currently selected site. Cannot be undone.</span>
         </label>
-        <button id="btn-delete-domain" style="background:transparent;border-color:var(--red);color:var(--red);">Delete</button>
+        <button id="btn-delete-domain" class="btn-danger">Delete</button>
       </div>
     </div>
+    </div>
   </div>
+  </main>
   </div>
 
   <script src="app.js"></script>

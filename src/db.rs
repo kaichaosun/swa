@@ -324,24 +324,6 @@ impl Database {
         Ok(ActionStats { daily, by_name })
     }
 
-    pub fn get_unique_visitors(&self, from: &str, to: &str) -> Result<Vec<DailyStat>, rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT date(created_at) as day, COUNT(DISTINCT visitor_id) as count
-             FROM page_views
-             WHERE created_at >= ?1 AND created_at < ?2 AND visitor_id != ''
-             GROUP BY day
-             ORDER BY day",
-        )?;
-        let rows = stmt.query_map(params![from, to], |row| {
-            Ok(DailyStat {
-                date: row.get(0)?,
-                count: row.get(1)?,
-            })
-        })?;
-        rows.collect()
-    }
-
     // --- Auth methods ---
 
     pub fn count_users(&self) -> Result<i64, rusqlite::Error> {

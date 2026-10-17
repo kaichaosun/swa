@@ -349,7 +349,7 @@
     var settings = isSettingsView();
     document.getElementById('view-dashboard').hidden = settings;
     document.getElementById('view-settings').hidden = !settings;
-    document.body.classList.toggle('settings-open', settings);
+    document.getElementById('site-title').textContent = currentDomain || 'No sites yet';
     document.getElementById('nav-settings').classList.toggle('active', settings);
     renderSiteList();
     if (!settings) loadAll();
@@ -374,9 +374,9 @@
 
   // --- Controls ---
 
-  document.querySelectorAll('.controls button[data-range]').forEach(function (btn) {
+  document.querySelectorAll('.range-controls button[data-range]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.range-controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       var preset = btn.getAttribute('data-range');
       currentRange = getRange(preset);
@@ -399,7 +399,7 @@
     var from = document.getElementById('date-from').value;
     var to = document.getElementById('date-to').value;
     if (from && to) {
-      document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.range-controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
       currentRange = { from: from, to: addDays(to, 1) };
       loadAll();
     }
@@ -408,18 +408,20 @@
   // --- Settings ---
 
   var allowedSites = [];
+  var restrictSites = false;
 
   function loadSettings() {
     api('/dash/settings').then(function (res) {
       if (!res) return;
       document.getElementById('toggle-localhost').checked = res.data.allow_localhost;
+      restrictSites = res.data.restrict_sites;
       allowedSites = res.data.allowed_sites || [];
       renderAllowedSites();
     }).catch(function () {});
   }
 
   // Rough client-side mirror of the server's local-host check, only used to keep
-  // local addresses out of the suggestions and the "will be dropped" warning.
+  // local addresses out of the suggestions.
   function looksLocal(host) {
     host = host.toLowerCase();
     return !host || host === 'localhost' || /\.(localhost|local)$/.test(host) ||
@@ -437,11 +439,11 @@
   }
 
   function renderAllowedSites() {
+    document.getElementById(restrictSites ? 'mode-list' : 'mode-any').checked = true;
+    document.getElementById('allowed-panel').hidden = !restrictSites;
+
     var list = document.getElementById('allowed-list');
     list.innerHTML = '';
-    if (!allowedSites.length) {
-      list.innerHTML = '<div class="site-empty">No restrictions. Events from any site are accepted.</div>';
-    }
     allowedSites.forEach(function (site) {
       var row = document.createElement('div');
       row.className = 'allowed-item';
@@ -457,39 +459,60 @@
       list.appendChild(row);
     });
 
-    var suggestions = document.getElementById('known-sites');
-    suggestions.innerHTML = '';
-    domains.forEach(function (d) {
-      if (looksLocal(d.domain) || allowedSites.indexOf(d.domain.toLowerCase()) !== -1) return;
-      var opt = document.createElement('option');
-      opt.value = d.domain;
-      suggestions.appendChild(opt);
+    // Tracked public sites that the list doesn't cover yet: one click to add
+    var suggested = document.getElementById('suggested-sites');
+    var missing = domains.filter(function (d) {
+      return !looksLocal(d.domain) && !siteAllowed(d.domain.toLowerCase());
     });
+    suggested.innerHTML = '';
+    suggested.hidden = !missing.length;
+    if (missing.length) {
+      suggested.appendChild(document.createTextNode('Tracked sites not on the list:'));
+      missing.forEach(function (d) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.textContent = '+ ' + d.domain;
+        chip.addEventListener('click', function () {
+          saveAllowedSites(allowedSites.concat([d.domain]));
+        });
+        suggested.appendChild(chip);
+      });
+    }
 
     var warning = document.getElementById('allowed-warning');
-    var blocked = allowedSites.length ? domains.filter(function (d) {
-      return !looksLocal(d.domain) && !siteAllowed(d.domain.toLowerCase());
-    }) : [];
-    warning.hidden = !blocked.length;
-    warning.textContent = blocked.length
-      ? 'New events from these tracked sites will be dropped: ' +
-        blocked.map(function (d) { return d.domain; }).join(', ')
-      : '';
+    warning.hidden = allowedSites.length > 0;
+    warning.textContent = 'The list is empty, so events from every public website are being dropped.';
+  }
+
+  function saveSiteSettings(body) {
+    return postApi('/dash/settings', body).then(function (r) {
+      if (!r.ok) alert('Failed to save settings.');
+      return loadSettings();
+    }).catch(function () {
+      alert('Failed to save settings.');
+      loadSettings();
+    });
   }
 
   function saveAllowedSites(next) {
-    return postApi('/dash/settings', { allowed_sites: next }).then(function (r) {
-      if (!r.ok) { alert('Failed to save allowed sites.'); return; }
-      loadSettings();
-    }).catch(function () { alert('Failed to save allowed sites.'); });
+    return saveSiteSettings({ allowed_sites: next });
   }
+
+  document.querySelectorAll('input[name="site-mode"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      restrictSites = this.value === 'list';
+      renderAllowedSites();
+      saveSiteSettings({ restrict_sites: restrictSites });
+    });
+  });
 
   document.getElementById('allowed-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var input = document.getElementById('allowed-input');
-    var value = input.value.trim();
-    if (!value) return;
-    saveAllowedSites(allowedSites.concat([value])).then(function () { input.value = ''; });
+    var entries = input.value.split(/[\s,;]+/).filter(Boolean);
+    if (!entries.length) return;
+    saveAllowedSites(allowedSites.concat(entries)).then(function () { input.value = ''; });
   });
 
   document.getElementById('btn-delete-domain').addEventListener('click', function () {
@@ -505,7 +528,7 @@
         var deleted = currentDomain;
         currentDomain = '';
         localStorage.removeItem('swa_domain');
-        loadDomains().then(function () { loadAll(); });
+        loadDomains().then(showView);
         alert('Deleted all data for ' + deleted + '.');
       } else {
         alert('Delete failed.');
@@ -525,9 +548,9 @@
   });
 
   // --- Init ---
-  document.querySelectorAll('.controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
+  document.querySelectorAll('.range-controls button[data-range]').forEach(function (b) { b.classList.remove('active'); });
   if (savedPreset !== 'custom') {
-    var activeBtn = document.querySelector('.controls button[data-range="' + savedPreset + '"]');
+    var activeBtn = document.querySelector('.range-controls button[data-range="' + savedPreset + '"]');
     if (activeBtn) activeBtn.classList.add('active');
   }
   document.getElementById('date-from').value = currentRange.from;
@@ -542,6 +565,7 @@
 
   // Logout
   document.getElementById('btn-logout').addEventListener('click', function () {
+    if (!window.confirm('Log out of SWA Analytics?')) return;
     fetch('/auth/logout', { method: 'POST' }).then(function () {
       window.location.href = '/login';
     });

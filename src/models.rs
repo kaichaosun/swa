@@ -53,8 +53,6 @@ pub struct DateRangeWithLimit {
     pub domain: String,
     #[serde(default = "default_limit")]
     pub limit: i64,
-    #[serde(default)]
-    pub tz_offset: i32,
 }
 
 fn default_limit() -> i64 {
@@ -158,6 +156,8 @@ pub struct RealtimeQuery {
 #[derive(Debug, Serialize)]
 pub struct SettingsResponse {
     pub allow_localhost: bool,
+    /// When true, only `allowed_sites` may send events; otherwise any public site may.
+    pub restrict_sites: bool,
     pub allowed_sites: Vec<String>,
 }
 
@@ -166,6 +166,8 @@ pub struct SettingsResponse {
 pub struct SettingsUpdate {
     #[serde(default)]
     pub allow_localhost: Option<bool>,
+    #[serde(default)]
+    pub restrict_sites: Option<bool>,
     #[serde(default)]
     pub allowed_sites: Option<Vec<String>>,
 }
