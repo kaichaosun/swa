@@ -11,22 +11,62 @@
   <div class="header">
     <div class="header-left">
       <h1><span>SWA</span> Analytics</h1>
-      <select id="site-selector" class="site-selector">
-        <option value="" disabled selected>Select a site...</option>
-      </select>
     </div>
     <div class="controls">
       <button id="btn-logout" style="margin-right:1rem;background:transparent;border-color:var(--red);color:var(--red);">Logout</button>
-      <button data-range="today" class="active">Today</button>
-      <button data-range="7d">7 days</button>
-      <button data-range="30d">30 days</button>
-      <input type="date" id="date-from">
-      <input type="date" id="date-to">
-      <button id="btn-custom">Apply</button>
+      <div class="range-controls">
+        <button data-range="today" class="active">Today</button>
+        <button data-range="7d">7 days</button>
+        <button data-range="30d">30 days</button>
+        <input type="date" id="date-from">
+        <input type="date" id="date-to">
+        <button id="btn-custom">Apply</button>
+      </div>
     </div>
   </div>
 
-  <div class="container">
+  <div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Sites <span id="site-count" class="site-count"></span></div>
+    <input type="search" id="site-filter" class="site-filter" placeholder="Filter sites..." autocomplete="off">
+    <nav id="site-list" class="site-list"></nav>
+    <a href="#settings" id="nav-settings" class="sidebar-settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </a>
+  </aside>
+
+  <div class="container" id="view-settings" hidden>
+    <h2 class="page-title">Settings</h2>
+
+    <div class="section">
+      <div class="section-title">Local development</div>
+      <div class="setting-row">
+        <label class="toggle-label" for="toggle-localhost">
+          <span>Allow localhost events</span>
+          <span class="setting-hint">When disabled, events from local addresses are silently dropped: localhost, *.localhost, *.local, 127.x, 0.0.0.0, private LAN ranges (10.x, 172.16–31.x, 192.168.x), link-local (169.254.x) and their IPv6 equivalents.</span>
+        </label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-localhost">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Allowed sites</div>
+      <p class="setting-hint">Only events from these sites are recorded. Leave the list empty to accept events from any site. Use <code>*.example.com</code> to allow every subdomain. Local addresses follow the localhost setting above.</p>
+      <form id="allowed-form" class="allowed-form">
+        <input type="text" id="allowed-input" class="text-input" placeholder="example.com" list="known-sites" autocomplete="off">
+        <datalist id="known-sites"></datalist>
+        <button type="submit" class="btn">Add</button>
+      </form>
+      <div id="allowed-list" class="allowed-list"></div>
+      <div id="allowed-warning" class="allowed-warning" hidden></div>
+    </div>
+  </div>
+
+  <div class="container" id="view-dashboard">
     <div class="realtime-bar">
       <div class="realtime-dot"></div>
       <span class="realtime-count" id="realtime-count">0</span>
@@ -91,17 +131,7 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Settings</div>
-      <div class="setting-row">
-        <label class="toggle-label" for="toggle-localhost">
-          <span>Allow localhost events</span>
-          <span class="setting-hint">When disabled, events from localhost / 127.0.0.1 are silently dropped.</span>
-        </label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="toggle-localhost">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
+      <div class="section-title">Manage site</div>
       <div class="setting-row">
         <label class="toggle-label">
           <span>Delete site data</span>
@@ -110,6 +140,7 @@
         <button id="btn-delete-domain" style="background:transparent;border-color:var(--red);color:var(--red);">Delete</button>
       </div>
     </div>
+  </div>
   </div>
 
   <script src="app.js"></script>

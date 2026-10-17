@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use argon2::password_hash::rand_core::OsRng;
@@ -5,7 +6,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::body::Bytes;
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
@@ -16,13 +17,80 @@ use crate::models::*;
 
 pub type AppState = Arc<Database>;
 
-fn is_localhost(domain: &str) -> bool {
-    let host = domain.split(':').next().unwrap_or(domain);
-    host.is_empty()
-        || host.eq_ignore_ascii_case("localhost")
-        || host == "127.0.0.1"
-        || host == "::1"
-        || host == "0.0.0.0"
+/// Strip an optional port and IPv6 brackets: "[::1]:8080" -> "::1", "example.com:80" -> "example.com".
+fn host_only(domain: &str) -> &str {
+    let domain = domain.trim();
+    if let Some(rest) = domain.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    // A bare IPv6 address has several colons; only strip a port from host:port
+    if domain.matches(':').count() == 1 {
+        return domain.split(':').next().unwrap_or(domain);
+    }
+    domain
+}
+
+/// True for loopback, private-network (LAN) and link-local hosts, i.e. anything
+/// that is a dev machine rather than a public site.
+fn is_local_host(domain: &str) -> bool {
+    let host = host_only(domain).trim_end_matches('.');
+    if host.is_empty() {
+        return true;
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+            }
+            IpAddr::V6(v6) => {
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    || v6.is_unique_local()
+                    || v6.is_unicast_link_local()
+                    || v6.to_ipv4_mapped().is_some_and(|v4| is_local_host(&v4.to_string()))
+            }
+        };
+    }
+    let host = host.to_ascii_lowercase();
+    host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local")
+}
+
+/// Normalize a user-entered site into a bare lowercase host, e.g.
+/// "https://WWW.Example.com:443/path" -> "www.example.com". Keeps a leading "*." wildcard.
+fn normalize_site(input: &str) -> String {
+    let s = input.trim();
+    let s = s.split_once("://").map(|(_, rest)| rest).unwrap_or(s);
+    let s = s.split(['/', '?', '#']).next().unwrap_or(s);
+    host_only(s).trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// An entry matches the exact host, or with a "*." prefix, any subdomain of it.
+fn site_matches(entry: &str, host: &str) -> bool {
+    match entry.strip_prefix("*.") {
+        Some(base) => host.ends_with(&format!(".{}", base)),
+        None => entry == host,
+    }
+}
+
+fn get_allowed_sites(db: &Database) -> Result<Vec<String>, rusqlite::Error> {
+    Ok(db
+        .get_setting("allowed_sites")?
+        .and_then(|v| serde_json::from_str(&v).ok())
+        .unwrap_or_default())
+}
+
+/// Whether an incoming event for `domain` should be stored. Local hosts are governed
+/// by the allow_localhost toggle; public hosts by the allowed-sites list (empty = all).
+fn accepts_domain(db: &Database, domain: &str) -> bool {
+    if is_local_host(domain) {
+        return db.get_setting("allow_localhost").ok().flatten().as_deref() == Some("true");
+    }
+    let allowed = get_allowed_sites(db).unwrap_or_default();
+    if allowed.is_empty() {
+        return true;
+    }
+    let host = normalize_site(domain);
+    allowed.iter().any(|entry| site_matches(entry, &host))
 }
 
 pub async fn collect_pageview(State(db): State<AppState>, body: Bytes) -> StatusCode {
@@ -30,11 +98,8 @@ pub async fn collect_pageview(State(db): State<AppState>, body: Bytes) -> Status
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
-    if is_localhost(&event.domain) {
-        let allow = db.get_setting("allow_localhost").unwrap_or(None);
-        if allow.as_deref() != Some("true") {
-            return StatusCode::ACCEPTED;
-        }
+    if !accepts_domain(&db, &event.domain) {
+        return StatusCode::ACCEPTED;
     }
     match db.insert_page_view(&event) {
         Ok(_) => StatusCode::ACCEPTED,
@@ -50,76 +115,15 @@ pub async fn collect_action(State(db): State<AppState>, body: Bytes) -> StatusCo
         Ok(e) => e,
         Err(_) => return StatusCode::BAD_REQUEST,
     };
+    if !accepts_domain(&db, &event.domain) {
+        return StatusCode::ACCEPTED;
+    }
     match db.insert_action(&event) {
         Ok(_) => StatusCode::ACCEPTED,
         Err(e) => {
             tracing::error!("Failed to insert action: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         }
-    }
-}
-
-/// Legacy shim for clients still calling POST /track/download with the old
-/// {app_name, version, platform} payload. Derives `domain` from the Origin or
-/// Referer header (old clients didn't send it) and writes into action_events.
-/// Remove this handler and its route once /track/download traffic is zero.
-pub async fn collect_download_legacy(
-    State(db): State<AppState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> StatusCode {
-    let legacy: LegacyDownloadEvent = match serde_json::from_slice(&body) {
-        Ok(e) => e,
-        Err(_) => return StatusCode::BAD_REQUEST,
-    };
-
-    let domain = derive_domain_from_headers(&headers).unwrap_or_else(|| "unknown".to_string());
-
-    let label = if legacy.version.is_empty() {
-        legacy.platform.clone()
-    } else if legacy.platform.is_empty() {
-        legacy.version.clone()
-    } else {
-        format!("{} {}", legacy.platform, legacy.version)
-    };
-
-    let event = ActionEvent {
-        domain,
-        name: legacy.app_name,
-        label,
-        referrer: legacy.referrer,
-    };
-
-    tracing::warn!(
-        "legacy /track/download hit (domain={}, name={}); update client to swa.action()",
-        event.domain,
-        event.name,
-    );
-
-    match db.insert_action(&event) {
-        Ok(_) => StatusCode::ACCEPTED,
-        Err(e) => {
-            tracing::error!("Failed to insert legacy download: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-    }
-}
-
-fn derive_domain_from_headers(headers: &HeaderMap) -> Option<String> {
-    let raw = headers
-        .get("origin")
-        .or_else(|| headers.get("referer"))
-        .and_then(|v| v.to_str().ok())?;
-    // Strip scheme
-    let after_scheme = raw.split_once("://").map(|(_, rest)| rest).unwrap_or(raw);
-    // Take host[:port], drop path
-    let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-    // Drop port
-    let host = host_port.split(':').next().unwrap_or(host_port);
-    if host.is_empty() {
-        None
-    } else {
-        Some(host.to_string())
     }
 }
 
@@ -253,18 +257,16 @@ pub async fn stats_realtime(
 pub async fn get_settings(
     State(db): State<AppState>,
 ) -> Result<Json<ApiResponse<SettingsResponse>>, StatusCode> {
-    let allow_localhost = db
-        .get_setting("allow_localhost")
-        .map_err(|e| {
-            tracing::error!("Failed to get settings: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .map(|v| v == "true")
-        .unwrap_or(false);
-
-    Ok(Json(ApiResponse {
-        data: SettingsResponse { allow_localhost },
-    }))
+    let load = || -> Result<SettingsResponse, rusqlite::Error> {
+        Ok(SettingsResponse {
+            allow_localhost: db.get_setting("allow_localhost")?.as_deref() == Some("true"),
+            allowed_sites: get_allowed_sites(&db)?,
+        })
+    };
+    load().map(|data| Json(ApiResponse { data })).map_err(|e| {
+        tracing::error!("Failed to get settings: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
 }
 
 pub async fn update_settings(State(db): State<AppState>, body: Bytes) -> impl IntoResponse {
@@ -281,8 +283,24 @@ pub async fn update_settings(State(db): State<AppState>, body: Bytes) -> impl In
         }
     };
 
-    let value = if req.allow_localhost { "true" } else { "false" };
-    match db.set_setting("allow_localhost", value) {
+    let save = || -> Result<(), rusqlite::Error> {
+        if let Some(allow) = req.allow_localhost {
+            db.set_setting("allow_localhost", if allow { "true" } else { "false" })?;
+        }
+        if let Some(sites) = &req.allowed_sites {
+            let mut normalized: Vec<String> = sites
+                .iter()
+                .map(|s| normalize_site(s))
+                .filter(|s| !s.is_empty() && s != "*.")
+                .collect();
+            normalized.sort();
+            normalized.dedup();
+            let json = serde_json::to_string(&normalized).unwrap_or_else(|_| "[]".into());
+            db.set_setting("allowed_sites", &json)?;
+        }
+        Ok(())
+    };
+    match save() {
         Ok(_) => (
             StatusCode::OK,
             Json(AuthResponse {
@@ -544,4 +562,44 @@ pub async fn logout(State(db): State<AppState>, jar: CookieJar) -> impl IntoResp
             message: "Logged out".into(),
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_hosts() {
+        for h in [
+            "", "localhost", "LOCALHOST:3000", "app.localhost", "my-mac.local",
+            "127.0.0.1", "127.0.0.2:8080", "0.0.0.0", "10.0.0.5", "172.16.0.1",
+            "172.31.255.255", "192.168.1.20:5173", "169.254.1.1",
+            "[::1]", "[::1]:3000", "::1", "fd12:3456::1", "fe80::1", "[::ffff:192.168.0.1]",
+        ] {
+            assert!(is_local_host(h), "{h} should be local");
+        }
+        for h in [
+            "example.com", "www.example.com:443", "8.8.8.8", "172.32.0.1",
+            "192.169.0.1", "[2001:db8::1]", "localhost.example.com",
+        ] {
+            assert!(!is_local_host(h), "{h} should not be local");
+        }
+    }
+
+    #[test]
+    fn normalizes_sites() {
+        assert_eq!(normalize_site(" https://WWW.Example.com:443/path?q=1 "), "www.example.com");
+        assert_eq!(normalize_site("example.com."), "example.com");
+        assert_eq!(normalize_site("*.Example.com"), "*.example.com");
+    }
+
+    #[test]
+    fn matches_sites() {
+        assert!(site_matches("example.com", "example.com"));
+        assert!(!site_matches("example.com", "www.example.com"));
+        assert!(site_matches("*.example.com", "www.example.com"));
+        assert!(site_matches("*.example.com", "a.b.example.com"));
+        assert!(!site_matches("*.example.com", "example.com"));
+        assert!(!site_matches("*.example.com", "badexample.com"));
+    }
 }

@@ -34,20 +34,6 @@ pub struct ActionEvent {
     pub referrer: String,
 }
 
-/// Legacy payload from pre-rename clients still calling POST /track/download.
-/// Mapped into ActionEvent by the legacy shim handler. Remove once traffic on
-/// /track/download has gone to zero.
-#[derive(Debug, Deserialize)]
-pub struct LegacyDownloadEvent {
-    pub app_name: String,
-    #[serde(default)]
-    pub version: String,
-    #[serde(default)]
-    pub platform: String,
-    #[serde(default)]
-    pub referrer: String,
-}
-
 // --- Query parameters ---
 
 #[derive(Debug, Deserialize)]
@@ -172,11 +158,16 @@ pub struct RealtimeQuery {
 #[derive(Debug, Serialize)]
 pub struct SettingsResponse {
     pub allow_localhost: bool,
+    pub allowed_sites: Vec<String>,
 }
 
+/// Partial update: omitted fields are left unchanged.
 #[derive(Debug, Deserialize)]
 pub struct SettingsUpdate {
-    pub allow_localhost: bool,
+    #[serde(default)]
+    pub allow_localhost: Option<bool>,
+    #[serde(default)]
+    pub allowed_sites: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

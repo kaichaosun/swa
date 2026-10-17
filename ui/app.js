@@ -285,36 +285,77 @@
     return d.innerHTML;
   }
 
-  // --- Site selector ---
+  // --- Site sidebar ---
+
+  var domains = [];
+
+  function renderSiteList() {
+    var list = document.getElementById('site-list');
+    var filter = document.getElementById('site-filter').value.trim().toLowerCase();
+    document.getElementById('site-count').textContent = domains.length ? domains.length : '';
+    list.innerHTML = '';
+    if (!domains.length) {
+      list.innerHTML = '<div class="site-empty">No sites yet</div>';
+      return;
+    }
+    var shown = domains.filter(function (d) {
+      return d.domain.toLowerCase().indexOf(filter) !== -1;
+    });
+    if (!shown.length) {
+      list.innerHTML = '<div class="site-empty">No matching sites</div>';
+      return;
+    }
+    shown.forEach(function (d) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'site-item' + (d.domain === currentDomain && !isSettingsView() ? ' active' : '');
+      btn.title = d.domain;
+      btn.innerHTML = '<span class="site-name">' + escHtml(d.domain) + '</span>' +
+        '<span class="site-views">' + fmt(d.total_views) + '</span>';
+      btn.addEventListener('click', function () {
+        if (d.domain === currentDomain && !isSettingsView()) return;
+        currentDomain = d.domain;
+        localStorage.setItem('swa_domain', currentDomain);
+        if (isSettingsView()) {
+          history.pushState(null, '', location.pathname + location.search);
+        }
+        showView();
+      });
+      list.appendChild(btn);
+    });
+  }
 
   function loadDomains() {
     return api('/dash/stats/domains').then(function (res) {
-      if (!res || !res.data.length) return;
-      var select = document.getElementById('site-selector');
-      var prev = currentDomain;
-      select.innerHTML = '';
-      res.data.forEach(function (d) {
-        var opt = document.createElement('option');
-        opt.value = d.domain;
-        opt.textContent = d.domain + ' (' + fmt(d.total_views) + ')';
-        select.appendChild(opt);
-      });
+      if (!res) return;
+      domains = res.data || [];
       // Restore previous selection or pick first
-      var found = res.data.some(function (d) { return d.domain === prev; });
-      if (found) {
-        select.value = prev;
-      } else {
-        select.value = res.data[0].domain;
-      }
-      currentDomain = select.value;
+      var found = domains.some(function (d) { return d.domain === currentDomain; });
+      if (!found) currentDomain = domains.length ? domains[0].domain : '';
+      renderSiteList();
+      renderAllowedSites();
     }).catch(function () {});
   }
 
-  document.getElementById('site-selector').addEventListener('change', function () {
-    currentDomain = this.value;
-    localStorage.setItem('swa_domain', currentDomain);
-    loadAll();
-  });
+  document.getElementById('site-filter').addEventListener('input', renderSiteList);
+
+  // --- Views (dashboard / settings) ---
+
+  function isSettingsView() {
+    return location.hash === '#settings';
+  }
+
+  function showView() {
+    var settings = isSettingsView();
+    document.getElementById('view-dashboard').hidden = settings;
+    document.getElementById('view-settings').hidden = !settings;
+    document.body.classList.toggle('settings-open', settings);
+    document.getElementById('nav-settings').classList.toggle('active', settings);
+    renderSiteList();
+    if (!settings) loadAll();
+  }
+
+  window.addEventListener('hashchange', showView);
 
   // --- Load all ---
 
@@ -366,12 +407,90 @@
 
   // --- Settings ---
 
+  var allowedSites = [];
+
   function loadSettings() {
     api('/dash/settings').then(function (res) {
       if (!res) return;
       document.getElementById('toggle-localhost').checked = res.data.allow_localhost;
+      allowedSites = res.data.allowed_sites || [];
+      renderAllowedSites();
     }).catch(function () {});
   }
+
+  // Rough client-side mirror of the server's local-host check, only used to keep
+  // local addresses out of the suggestions and the "will be dropped" warning.
+  function looksLocal(host) {
+    host = host.toLowerCase();
+    return !host || host === 'localhost' || /\.(localhost|local)$/.test(host) ||
+      host.indexOf(':') !== -1 || /^[0-9.]+$/.test(host);
+  }
+
+  function siteAllowed(host) {
+    return allowedSites.some(function (entry) {
+      if (entry.indexOf('*.') === 0) {
+        var base = entry.slice(1); // ".example.com"
+        return host.length > base.length && host.slice(-base.length) === base;
+      }
+      return entry === host;
+    });
+  }
+
+  function renderAllowedSites() {
+    var list = document.getElementById('allowed-list');
+    list.innerHTML = '';
+    if (!allowedSites.length) {
+      list.innerHTML = '<div class="site-empty">No restrictions. Events from any site are accepted.</div>';
+    }
+    allowedSites.forEach(function (site) {
+      var row = document.createElement('div');
+      row.className = 'allowed-item';
+      row.innerHTML = '<span class="path-cell">' + escHtml(site) + '</span>';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-remove';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', function () {
+        saveAllowedSites(allowedSites.filter(function (s) { return s !== site; }));
+      });
+      row.appendChild(remove);
+      list.appendChild(row);
+    });
+
+    var suggestions = document.getElementById('known-sites');
+    suggestions.innerHTML = '';
+    domains.forEach(function (d) {
+      if (looksLocal(d.domain) || allowedSites.indexOf(d.domain.toLowerCase()) !== -1) return;
+      var opt = document.createElement('option');
+      opt.value = d.domain;
+      suggestions.appendChild(opt);
+    });
+
+    var warning = document.getElementById('allowed-warning');
+    var blocked = allowedSites.length ? domains.filter(function (d) {
+      return !looksLocal(d.domain) && !siteAllowed(d.domain.toLowerCase());
+    }) : [];
+    warning.hidden = !blocked.length;
+    warning.textContent = blocked.length
+      ? 'New events from these tracked sites will be dropped: ' +
+        blocked.map(function (d) { return d.domain; }).join(', ')
+      : '';
+  }
+
+  function saveAllowedSites(next) {
+    return postApi('/dash/settings', { allowed_sites: next }).then(function (r) {
+      if (!r.ok) { alert('Failed to save allowed sites.'); return; }
+      loadSettings();
+    }).catch(function () { alert('Failed to save allowed sites.'); });
+  }
+
+  document.getElementById('allowed-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('allowed-input');
+    var value = input.value.trim();
+    if (!value) return;
+    saveAllowedSites(allowedSites.concat([value])).then(function () { input.value = ''; });
+  });
 
   document.getElementById('btn-delete-domain').addEventListener('click', function () {
     if (!currentDomain) { alert('No site selected.'); return; }
@@ -413,13 +532,13 @@
   }
   document.getElementById('date-from').value = currentRange.from;
   document.getElementById('date-to').value = addDays(currentRange.to, -1);
-  loadDomains().then(function () {
-    loadAll();
-  });
+  loadDomains().then(showView);
   loadSettings();
 
   // Auto-refresh every 60s
-  refreshTimer = setInterval(loadAll, 60000);
+  refreshTimer = setInterval(function () {
+    if (!isSettingsView()) loadAll();
+  }, 60000);
 
   // Logout
   document.getElementById('btn-logout').addEventListener('click', function () {
