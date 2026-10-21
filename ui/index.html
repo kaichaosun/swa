@@ -9,10 +9,10 @@
 </head>
 <body>
   <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar" aria-label="Sites">
     <h1 class="brand"><span>SWA</span> Analytics</h1>
     <div class="sidebar-title">Sites <span id="site-count" class="site-count"></span></div>
-    <input type="search" id="site-filter" class="site-filter" placeholder="Filter sites..." autocomplete="off">
+    <input type="search" id="site-filter" class="site-filter" placeholder="Filter sites..." autocomplete="off" aria-label="Filter sites">
     <nav id="site-list" class="site-list"></nav>
     <div class="sidebar-footer">
       <a href="#settings" id="nav-settings" class="sidebar-link">
@@ -25,8 +25,17 @@
       </button>
     </div>
   </aside>
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
 
   <main class="main">
+  <div class="mobile-bar">
+    <span class="brand"><span>SWA</span></span>
+    <button type="button" id="btn-sites" class="site-switcher" aria-controls="sidebar" aria-expanded="false">
+      <span id="site-switcher-label">Sites</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </div>
+
   <div id="view-settings" hidden>
     <div class="page-header">
       <h2 class="page-title">Settings</h2>
@@ -78,59 +87,106 @@
         <div id="allowed-warning" class="allowed-warning" hidden></div>
       </div>
     </div>
+
+    <div class="section">
+      <div class="section-title">Site data</div>
+      <div class="setting-row">
+        <label class="toggle-label" for="delete-site">
+          <span>Delete site data</span>
+          <span class="setting-hint">Permanently removes all page views and actions for one site. Cannot be undone.</span>
+        </label>
+        <div class="delete-controls">
+          <select id="delete-site" class="text-input select-input"></select>
+          <button type="button" id="btn-delete-domain" class="btn-danger">Delete…</button>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 
   <div id="view-dashboard">
     <div class="page-header">
-      <h2 class="page-title" id="site-title"></h2>
-      <div class="range-controls">
-        <button data-range="today" class="active">Today</button>
-        <button data-range="7d">7 days</button>
-        <button data-range="30d">30 days</button>
-        <input type="date" id="date-from">
-        <input type="date" id="date-to">
-        <button id="btn-custom">Apply</button>
+      <div class="header-left">
+        <h2 class="page-title" id="site-title"></h2>
+        <span class="live-pill" id="live-pill" data-dash-only>
+          <span class="realtime-dot"></span>
+          <span><strong class="realtime-count" id="realtime-count">0</strong> <span id="realtime-label">visitors now</span></span>
+        </span>
+        <span class="updated" data-dash-only>
+          <span id="updated-text"></span>
+          <button type="button" id="btn-refresh" class="icon-btn" aria-label="Refresh now" title="Refresh now">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
+        </span>
       </div>
-    </div>
-    <div class="container">
-    <div class="realtime-bar">
-      <div class="realtime-dot"></div>
-      <span class="realtime-count" id="realtime-count">0</span>
-      <span>current visitors</span>
+      <div class="range-controls" data-dash-only>
+        <div class="segmented" role="group" aria-label="Date range">
+          <button type="button" data-range="today">Today</button>
+          <button type="button" data-range="7d">7 days</button>
+          <button type="button" data-range="30d">30 days</button>
+          <button type="button" id="btn-custom-toggle" aria-expanded="false" aria-controls="custom-popover">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="custom-label">Custom</span>
+          </button>
+        </div>
+        <form id="custom-popover" class="custom-popover" hidden>
+          <label>From <input type="date" id="date-from" required></label>
+          <label>To <input type="date" id="date-to" required></label>
+          <button type="submit" class="btn">Apply</button>
+        </form>
+      </div>
     </div>
 
+    <div class="container" id="dash-empty" hidden>
+      <div class="section onboarding">
+        <h3 class="onboarding-title">Add the tracker to your site</h3>
+        <p class="setting-hint">Paste this into the <code>&lt;head&gt;</code> of every page you want to track. The site shows up in the sidebar as soon as its first page view arrives.</p>
+        <div class="snippet">
+          <code id="tracker-snippet"></code>
+          <button type="button" id="btn-copy-snippet" class="btn-secondary btn-copy">Copy</button>
+        </div>
+        <p class="setting-hint">The address assumes the tracker API runs on port 3330 of this host. Change it if you serve the API somewhere else, for example behind a reverse proxy.</p>
+        <p class="setting-hint">Testing on localhost? Turn on <a href="#settings">Allow localhost events</a> in Settings first.</p>
+        <div class="waiting"><span class="waiting-dot"></span>Waiting for the first event. This page checks again every minute.</div>
+      </div>
+    </div>
+
+    <div class="container" id="dash-content">
     <div class="cards">
       <div class="card">
-        <div class="card-label">Total Views</div>
-        <div class="card-value" id="total-views">-</div>
+        <div class="card-label">Page views</div>
+        <div class="card-row"><span class="card-value" id="kpi-views">-</span><span class="delta" id="delta-views"></span></div>
+        <div class="card-prev" id="prev-views"></div>
       </div>
       <div class="card">
-        <div class="card-label">Unique Visitors</div>
-        <div class="card-value" id="unique-visitors">-</div>
+        <div class="card-label">Unique visitors</div>
+        <div class="card-row"><span class="card-value" id="kpi-visitors">-</span><span class="delta" id="delta-visitors"></span></div>
+        <div class="card-prev" id="prev-visitors"></div>
       </div>
       <div class="card">
-        <div class="card-label">Avg Views / Day</div>
-        <div class="card-value" id="avg-views">-</div>
+        <div class="card-label">Views per visitor</div>
+        <div class="card-row"><span class="card-value" id="kpi-per-visitor">-</span><span class="delta" id="delta-per-visitor"></span></div>
+        <div class="card-prev" id="prev-per-visitor"></div>
       </div>
       <div class="card">
         <div class="card-label">Actions</div>
-        <div class="card-value" id="total-actions">-</div>
+        <div class="card-row"><span class="card-value" id="kpi-actions">-</span><span class="delta" id="delta-actions"></span></div>
+        <div class="card-prev" id="prev-actions"></div>
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">Page Views</div>
-      <div class="chart-wrap"><canvas id="chart-pageviews"></canvas></div>
+      <div class="section-title">Page views</div>
+      <div class="chart-wrap"><canvas id="chart-pageviews"></canvas><div class="panel-status" id="status-pageviews" hidden></div></div>
     </div>
 
     <div class="grid-2">
       <div class="section">
-        <div class="section-title">Top Pages</div>
+        <div class="section-title">Top pages</div>
         <div class="table-wrap" id="table-pages"><div class="loading">Loading...</div></div>
       </div>
       <div class="section">
-        <div class="section-title">Top Referrers</div>
+        <div class="section-title">Top referrers</div>
         <div class="table-wrap" id="table-referrers"><div class="loading">Loading...</div></div>
       </div>
     </div>
@@ -142,35 +198,45 @@
 
     <div class="grid-2">
       <div class="section">
-        <div class="section-title">Browsers</div>
-        <div class="chart-wrap"><canvas id="chart-browsers"></canvas></div>
+        <div class="section-head">
+          <div class="section-title">Devices</div>
+          <div class="segmented segmented-sm" role="group" aria-label="Device breakdown">
+            <button type="button" data-device="browsers">Browsers</button>
+            <button type="button" data-device="os">Operating systems</button>
+          </div>
+        </div>
+        <div id="list-devices"><div class="loading">Loading...</div></div>
       </div>
       <div class="section">
-        <div class="section-title">Operating Systems</div>
-        <div class="chart-wrap"><canvas id="chart-os"></canvas></div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Actions</div>
-      <div class="chart-wrap"><canvas id="chart-actions"></canvas></div>
-      <div class="table-wrap" id="table-actions" style="margin-top:1rem;"></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Manage site</div>
-      <div class="setting-row">
-        <label class="toggle-label">
-          <span>Delete site data</span>
-          <span class="setting-hint">Permanently removes all page views and actions for the currently selected site. Cannot be undone.</span>
-        </label>
-        <button id="btn-delete-domain" class="btn-danger">Delete</button>
+        <div class="section-head">
+          <div class="section-title">Actions</div>
+          <span class="section-meta" id="actions-total"></span>
+        </div>
+        <div class="chart-wrap chart-sm" id="actions-chart-wrap"><canvas id="chart-actions"></canvas><div class="panel-status" id="status-actions" hidden></div></div>
+        <div id="list-actions"></div>
       </div>
     </div>
     </div>
   </div>
   </main>
   </div>
+
+  <dialog id="dialog" class="dialog" aria-labelledby="dialog-title">
+    <form method="dialog" class="dialog-body">
+      <h3 id="dialog-title" class="dialog-title"></h3>
+      <p id="dialog-message" class="dialog-message"></p>
+      <label id="dialog-field" class="dialog-field" for="dialog-input" hidden>
+        <span id="dialog-field-hint"></span>
+        <input type="text" id="dialog-input" class="text-input" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel" class="btn-secondary">Cancel</button>
+        <button type="submit" value="confirm" id="dialog-confirm" class="btn">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
