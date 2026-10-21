@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SWA - Login</title>
+  <script>try { var t = localStorage.getItem('swa_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
   <link rel="stylesheet" href="style.css">
   <style>
     .login-wrap {
@@ -58,7 +59,7 @@
       width: 100%;
       padding: 0.7rem;
       background: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
       border: none;
       border-radius: 6px;
       font-size: 0.95rem;
@@ -82,7 +83,7 @@
     }
     .toggle a:hover { text-decoration: underline; }
     .error-msg {
-      background: rgba(255,107,107,0.1);
+      background: var(--error-bg);
       color: var(--red);
       padding: 0.5rem 0.8rem;
       border-radius: 6px;

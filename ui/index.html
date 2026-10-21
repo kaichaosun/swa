@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SWA - Analytics</title>
+  <script>try { var t = localStorage.getItem('swa_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
@@ -41,6 +42,21 @@
       <h2 class="page-title">Settings</h2>
     </div>
     <div class="container">
+
+    <div class="section">
+      <div class="section-title">Appearance</div>
+      <div class="setting-row">
+        <div class="toggle-label">
+          <span>Theme</span>
+          <span class="setting-hint">System follows your operating system's light or dark setting. Saved in this browser only.</span>
+        </div>
+        <div class="segmented" role="group" aria-label="Theme">
+          <button type="button" data-theme-choice="system">System</button>
+          <button type="button" data-theme-choice="light">Light</button>
+          <button type="button" data-theme-choice="dark">Dark</button>
+        </div>
+      </div>
+    </div>
 
     <div class="section">
       <div class="section-title">Local development</div>

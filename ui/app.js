@@ -116,10 +116,60 @@
     });
   }
 
+  // --- Theme ---
+
+  var themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function themePref() {
+    var t = localStorage.getItem('swa_theme');
+    return t === 'light' || t === 'dark' ? t : 'system';
+  }
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // Chart.js draws on canvas, so it can't use the CSS variables directly
+  function applyChartTheme() {
+    Chart.defaults.color = cssVar('--text-dim');
+    Chart.defaults.borderColor = cssVar('--border');
+  }
+
+  function setTheme(pref) {
+    if (pref === 'system') {
+      localStorage.removeItem('swa_theme');
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      localStorage.setItem('swa_theme', pref);
+      document.documentElement.setAttribute('data-theme', pref);
+    }
+    themeChanged();
+  }
+
+  function renderThemeChoice() {
+    document.querySelectorAll('[data-theme-choice]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-theme-choice') === themePref());
+    });
+  }
+
+  function themeChanged() {
+    renderThemeChoice();
+    applyChartTheme();
+    // Charts keep the colors they were built with; rebuild them on the dashboard
+    if (!isSettingsView()) loadAll();
+  }
+
+  document.querySelectorAll('[data-theme-choice]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setTheme(btn.getAttribute('data-theme-choice')); });
+  });
+
+  themeQuery.addEventListener('change', function () {
+    if (themePref() === 'system') themeChanged();
+  });
+
   // --- Chart.js defaults ---
 
-  Chart.defaults.color = '#8b8fa3';
-  Chart.defaults.borderColor = '#2e3347';
+  applyChartTheme();
   Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
   var chartColors = ['#6c5ce7', '#00d68f', '#ffa94d', '#ff6b6b', '#74b9ff', '#fd79a8', '#a29bfe', '#fdcb6e'];
@@ -492,7 +542,7 @@
         var bar = '';
         var legend = '';
         labels.forEach(function (l, i) {
-          var color = l.other ? '#8b8fa3' : chartColors[i % chartColors.length];
+          var color = l.other ? 'var(--text-dim)' : chartColors[i % chartColors.length];
           var name = l.other ? l.name : (l.name || '(no label)');
           bar += '<span style="flex:' + l.count + ' 1 0;background:' + color + '"></span>';
           legend += '<span class="action-label"><span class="action-swatch" style="background:' + color + '"></span>' +
@@ -958,6 +1008,7 @@
   });
 
   // --- Init ---
+  renderThemeChoice();
   renderRangeControls();
   renderDevices();
   loadDomains().then(showView);
